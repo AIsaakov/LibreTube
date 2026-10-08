@@ -35,6 +35,7 @@ import androidx.core.net.toUri
 import androidx.core.os.bundleOf
 import androidx.core.os.postDelayed
 import androidx.core.view.WindowCompat
+import androidx.core.view.doOnAttach
 import androidx.core.view.isGone
 import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
@@ -646,8 +647,13 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
                 }
             }
 
-        binding.playerMotionLayout.progress = 1F
-        binding.playerMotionLayout.transitionToStart()
+        // MotionLayout defers setProgress until the view is attached, while transitionToStart
+        // is skipped if the progress is already 0, so running both on a detached view (e.g. when
+        // the activity is recreated) leaves the player minimized without notifying the listener
+        binding.playerMotionLayout.doOnAttach {
+            binding.playerMotionLayout.progress = 1F
+            binding.playerMotionLayout.transitionToStart()
+        }
 
         val activity = requireActivity()
         PictureInPictureCompat.setPictureInPictureParams(activity, pipParams)
