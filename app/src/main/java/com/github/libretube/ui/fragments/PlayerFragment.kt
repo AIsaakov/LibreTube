@@ -954,12 +954,17 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
 
         if (::playerController.isInitialized && playerController.isConnected) {
             playerController.removeListener(playerListener)
-            playerController.pause()
 
-            playerController.sendCustomCommand(
-                AbstractPlayerService.stopServiceCommand,
-                Bundle.EMPTY
-            )
+            // only stop playback if the user closed the player or the app, not when the system
+            // destroys the activity in the background (e.g. to reclaim memory), since the
+            // fragment is restored and reconnects to the running session afterwards
+            if (isRemoving || activity?.isFinishing == true) {
+                playerController.pause()
+                playerController.sendCustomCommand(
+                    AbstractPlayerService.stopServiceCommand,
+                    Bundle.EMPTY
+                )
+            }
             playerController.release()
         }
 
