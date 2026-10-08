@@ -567,6 +567,13 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
             connectToPlayerView(playerController)
             updatePlayPauseButton()
 
+            // onResume skips these commands if it runs before the controller is connected, e.g. when
+            // the activity is recreated while the session keeps playing in the background
+            if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                setAutoPlayCountdownEnabled(PlayerHelper.autoPlayCountdown)
+                setVideoTrackTypeDisabled(false)
+            }
+
             if (!startNewSession) {
                 // JSON-encode as work-around for https://github.com/androidx/media/issues/564
                 val streams: Streams? =
