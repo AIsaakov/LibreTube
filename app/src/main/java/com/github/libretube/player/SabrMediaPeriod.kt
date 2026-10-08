@@ -132,6 +132,10 @@ class SabrMediaPeriod(
         selectNewStreams(
             selections, streams, streamResetFlags, positionUs, streamIndexToTrackGroupIndex
         )
+        // stop fetching video if the video track was disabled, e.g. while the screen is off
+        if (selections.none { it?.trackGroup?.type == C.TRACK_TYPE_VIDEO }) {
+            sabrClient.deselectVideoFormat()
+        }
 
         // inform the server about when we changed the format
         val now = Instant.now().toEpochMilli()

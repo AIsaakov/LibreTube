@@ -277,6 +277,18 @@ class SabrClient private constructor(
     }
 
     /**
+     * Stop requesting video data, e.g. when the video track is disabled while the screen is off.
+     *
+     * Otherwise, the server keeps sending video segments along with the audio segments. Since the
+     * player never retrieves them, they would accumulate until the app runs out of memory.
+     * The downloaded video segments are dropped with the next request, when formats that are
+     * neither the audio nor the video format are cleared.
+     */
+    fun deselectVideoFormat() {
+        videoFormat = null
+    }
+
+    /**
      * Get the number of the last segment.
      *
      * Calling [getNextSegment] with [PlaybackRequest.segment] set to a value larger than the last
@@ -514,6 +526,15 @@ class SabrClient private constructor(
                 val format = initializedFormats[segment.header.itag]!!
                 format.downloadedSegments[segment.sequenceNumber] = segment
 
+                // drop the oldest segments if the player doesn't retrieve them, so that a format
+                // that isn't played can't hold an unbounded amount of memory, they are fetched
+                // again if the player requests them later
+                while (format.downloadedSegments.size > 1 &&
+                    format.downloadedSegments.values.sumOf { it.length().toLong() } > MAX_DOWNLOADED_BYTES
+                ) {
+                    format.downloadedSegments.remove(format.downloadedSegments.keys.first())
+                }
+
                 if (segment.header.isInitSeg) {
                     format.initSegment = segment
                 }
@@ -642,6 +663,7 @@ class SabrClient private constructor(
 
     companion object {
         private const val TAG = "SabrStream"
+        private const val MAX_DOWNLOADED_BYTES = 100L * 1024 * 1024
         private const val CONTENT_TYPE = "application/x-protobuf"
         private const val ENCODING = "identity"
         private const val ACCEPT = "application/vnd.yt-ump"
