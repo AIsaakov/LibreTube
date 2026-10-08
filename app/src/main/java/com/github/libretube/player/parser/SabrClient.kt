@@ -325,6 +325,14 @@ class SabrClient private constructor(
                     initializedFormats.keys.retainAll { audioFormat?.stream?.itag == it || videoFormat?.stream?.itag == it }
                 }
                 format = format ?: initializedFormats[itag]
+                com.github.libretube.helpers.DebugDiagnostics.sabr(
+                    "request itag=$itag segment=${playbackRequest.segment} " +
+                        "videoFormat=${videoFormat?.stream?.itag} unread=" +
+                        initializedFormats.values.joinToString(" ") { f ->
+                            "${f.id.itag}:${f.downloadedSegments.size}seg/" +
+                                "${f.downloadedSegments.values.sumOf { it.length().toLong() } / 1024}KB"
+                        }
+                )
                 return@withContext format?.getSegment(playbackRequest.segment)
             }
         }

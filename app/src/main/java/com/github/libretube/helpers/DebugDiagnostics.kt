@@ -114,6 +114,13 @@ object DebugDiagnostics {
         append("events.log", listOfNotNull("${now()} $message", stack).joinToString("\n"))
     }
 
+    /** Records SABR client state to sabr.log, kept separate as it's written on every request. */
+    fun sabr(message: String) {
+        if (!BuildConfig.DEBUG) return
+        Log.d(TAG, message)
+        append("sabr.log", "${now()} $message")
+    }
+
     /**
      * Records player state changes, play/pause reasons and failed loads for [player], each with the
      * session context, and notifies about playback errors.
