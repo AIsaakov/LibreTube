@@ -474,6 +474,12 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
                 PlayOfflineDialog.PLAY_OFFLINE_DIALOG_REQUEST_KEY, viewLifecycleOwner
             ) { _, bundle ->
                 isOffline = bundle.getBoolean(IntentData.isPlayingOffline)
+                // persist the choice, so that the fragment reconnects to the same player service
+                // when it's restored after the activity is recreated
+                requireArguments().putParcelable(
+                    IntentData.playerData,
+                    playerData.copy(isOffline = isOffline)
+                )
 
                 // start a new playback session - the method will read `isOffline` and decide whether
                 // to play the downloaded video based on it, so it's enough to set `isOffline` here
