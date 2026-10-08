@@ -80,9 +80,7 @@ open class OnlinePlayerService : AbstractPlayerService() {
                 }
 
                 Player.STATE_IDLE -> {
-                    com.github.libretube.helpers.DebugDiagnostics.log(
-                        "STATE_IDLE playerError=${exoPlayer?.playerError?.errorCodeName}"
-                    )
+                    com.github.libretube.helpers.DebugDiagnostics.onIdleTeardown(exoPlayer?.playerError)
                     onDestroy()
                 }
 
