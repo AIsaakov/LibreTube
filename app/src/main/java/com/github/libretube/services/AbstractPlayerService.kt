@@ -88,6 +88,12 @@ abstract class AbstractPlayerService : MediaLibraryService(), MediaLibrarySessio
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            com.github.libretube.helpers.DebugDiagnostics.log(
+                "onPlayerError ${error.errorCodeName} (${error.errorCode}) " +
+                    "httpStatus=${(error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode} " +
+                    "videoId=${com.github.libretube.helpers.DebugDiagnostics.currentVideoId}",
+                error
+            )
             // show a toast on errors
             toastFromMainThread(error.localizedMessage.orEmpty())
         }
@@ -254,6 +260,7 @@ abstract class AbstractPlayerService : MediaLibraryService(), MediaLibrarySessio
         exoPlayer?.clearMediaItems()
 
         this.videoId = videoId
+        com.github.libretube.helpers.DebugDiagnostics.currentVideoId = videoId
 
         CoroutineScope(Dispatchers.IO).launch {
             startPlayback()
@@ -349,6 +356,7 @@ abstract class AbstractPlayerService : MediaLibraryService(), MediaLibrarySessio
 
     override fun onCreate() {
         super.onCreate()
+        com.github.libretube.helpers.DebugDiagnostics.log("${javaClass.simpleName}.onCreate")
 
         notificationProvider = NowPlayingNotification(this)
         setMediaNotificationProvider(notificationProvider!!)
@@ -472,6 +480,7 @@ abstract class AbstractPlayerService : MediaLibraryService(), MediaLibrarySessio
     }
 
     override fun onDestroy() {
+        com.github.libretube.helpers.DebugDiagnostics.log("${javaClass.simpleName}.onDestroy", Throwable("caller"))
         // wait for a short time before killing the mediaSession
         // as the playerController must be released before we finish the session
         // otherwise there would be a

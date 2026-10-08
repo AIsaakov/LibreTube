@@ -80,6 +80,9 @@ open class OnlinePlayerService : AbstractPlayerService() {
                 }
 
                 Player.STATE_IDLE -> {
+                    com.github.libretube.helpers.DebugDiagnostics.log(
+                        "STATE_IDLE playerError=${exoPlayer?.playerError?.errorCodeName}"
+                    )
                     onDestroy()
                 }
 
@@ -113,6 +116,7 @@ open class OnlinePlayerService : AbstractPlayerService() {
 
         // get the intent arguments
         videoId = playerData.videoId!!
+        com.github.libretube.helpers.DebugDiagnostics.currentVideoId = videoId
         playlistId = playerData.playlistId
         channelId = playerData.channelId
         startTimestampSeconds = playerData.timestamp
