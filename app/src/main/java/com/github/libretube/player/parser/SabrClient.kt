@@ -165,6 +165,7 @@ class SabrClient private constructor(
 
     private var fatalError: SabrError? = null
     private val dispatcher = Dispatchers.IO.limitedParallelism(1)
+    private var lastProtectionStatus: Int? = null
 
     /** Audio format video format */
     private var audioFormat: Representation? = null
@@ -610,6 +611,13 @@ class SabrClient private constructor(
 
             UMPPartId.STREAM_PROTECTION_STATUS -> {
                 val status = StreamProtectionStatus.parseFrom(part.data)
+                if (status.status != lastProtectionStatus || status.status != 1) {
+                    com.github.libretube.helpers.DebugDiagnostics.sabr(
+                        "protection status ${status.status} (was $lastProtectionStatus) " +
+                            "sending token ${com.github.libretube.helpers.DebugDiagnostics.fingerprint(poToken?.toStringUtf8())}"
+                    )
+                    lastProtectionStatus = status.status
+                }
                 // https://github.com/coletdjnz/yt-dlp-dev/blob/5c0c2963396009a92101bc6e038b61844368409d/yt_dlp/extractor/youtube/_streaming/sabr/part.py
                 when (status.status) {
                     1 -> Log.i(TAG, "processPart: [StreamProtectionStatus] OK")

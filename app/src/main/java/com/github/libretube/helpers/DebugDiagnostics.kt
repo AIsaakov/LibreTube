@@ -114,6 +114,16 @@ object DebugDiagnostics {
         append("events.log", listOfNotNull("${now()} $message", stack).joinToString("\n"))
     }
 
+    /**
+     * Returns a short fingerprint of [value] (the first 8 hex digits of its SHA-256), so that tokens
+     * can be told apart in the logs without storing them.
+     */
+    fun fingerprint(value: String?): String {
+        if (value == null) return "null"
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
+        return digest.take(4).joinToString("") { "%02x".format(it) }
+    }
+
     /** Records SABR client state to sabr.log, kept separate as it's written on every request. */
     fun sabr(message: String) {
         if (!BuildConfig.DEBUG) return
@@ -176,7 +186,8 @@ object DebugDiagnostics {
                 log(
                     "load error trackType=${mediaLoadData.trackType} host=${loadEventInfo.uri.host} " +
                         "httpStatus=$httpStatus canceled=$wasCanceled " +
-                        "${error.javaClass.simpleName}: ${error.message?.take(200)} ${context()}"
+                        "${error.javaClass.simpleName}: ${error.message?.take(200)} ${context()}",
+                    error
                 )
             }
         })
