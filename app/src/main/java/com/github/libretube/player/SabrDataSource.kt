@@ -37,6 +37,10 @@ class SabrDataSource(
                 SabrClient::class.java.name,
                 "open: failed to get segment ${playbackRequest!!.segment} for ${playbackRequest.format.itag}: $e"
             )
+            com.github.libretube.helpers.DebugDiagnostics.sabr(
+                "segment ${playbackRequest.segment} for itag ${playbackRequest.format.itag} failed " +
+                    "${sabrClient.urlTiming()}: $e"
+            )
             throw IOException()
         }
 

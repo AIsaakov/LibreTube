@@ -178,7 +178,20 @@ class SabrClient private constructor(
         ByteString.copyFrom(manifest.videoPlaybackUstreamerConfig)
     )
 
+    /** Creation time, which is shortly after the stream information was fetched. */
+    private val createdMs = System.currentTimeMillis()
+
+    /** Age of this client and time until the stream URL's `expire` timestamp, for diagnostics. */
+    fun urlTiming(): String {
+        val uri = android.net.Uri.parse(url)
+        val expiresIn = uri.getQueryParameter("expire")?.toLongOrNull()
+            ?.let { it - System.currentTimeMillis() / 1000 }
+        return "clientAge=${(System.currentTimeMillis() - createdMs) / 1000}s " +
+            "urlExpiresIn=${expiresIn?.let { "${it}s" }} client=${uri.getQueryParameter("c")} host=${uri.host}"
+    }
+
     init {
+        com.github.libretube.helpers.DebugDiagnostics.sabr("sabr client created videoId=$videoId ${urlTiming()}")
         poTokenGenerator.getCachedWebClientPoToken()?.let {
             poToken = ByteString.copyFrom(it.streamingDataPoToken!!.toByteArray())
         }
@@ -558,6 +571,7 @@ class SabrClient private constructor(
             UMPPartId.SABR_REDIRECT -> {
                 val redirect = SabrRedirect.parseFrom(part.data)
                 url = redirect.url
+                com.github.libretube.helpers.DebugDiagnostics.sabr("redirect ${urlTiming()}")
             }
 
             UMPPartId.SABR_CONTEXT_UPDATE -> {
@@ -614,7 +628,7 @@ class SabrClient private constructor(
                 if (status.status != lastProtectionStatus || status.status != 1) {
                     com.github.libretube.helpers.DebugDiagnostics.sabr(
                         "protection status ${status.status} (was $lastProtectionStatus) " +
-                            "sending token ${com.github.libretube.helpers.DebugDiagnostics.fingerprint(poToken?.toStringUtf8())}"
+                            "sending token ${com.github.libretube.helpers.DebugDiagnostics.fingerprint(poToken?.toStringUtf8())} ${urlTiming()}"
                     )
                     lastProtectionStatus = status.status
                 }
