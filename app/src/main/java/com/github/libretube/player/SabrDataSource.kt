@@ -37,7 +37,8 @@ class SabrDataSource(
                 SabrClient::class.java.name,
                 "open: failed to get segment ${playbackRequest!!.segment} for ${playbackRequest.format.itag}: $e"
             )
-            throw IOException()
+            // keep the cause, so that the actual failure (e.g. a SABR error) shows up in error reports
+            throw IOException(e)
         }
 
         data = CompositeBuffer(segment.data)
