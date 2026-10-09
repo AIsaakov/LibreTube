@@ -146,9 +146,20 @@ object DebugDiagnostics {
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                val httpStatus = (error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
-                log("player error ${error.errorCodeName} (${error.errorCode}) httpStatus=$httpStatus ${context()}", error)
-                notifyUnexpectedStop("Playback error: ${error.errorCodeName}" + (httpStatus?.let { " (HTTP $it)" } ?: ""))
+                val causes = generateSequence<Throwable>(error) { it.cause }.toList()
+                val httpStatus = causes.firstNotNullOfOrNull {
+                    (it as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+                }
+                val rootCause = causes.last().let { "${it.javaClass.simpleName}: ${it.message}" }
+                log(
+                    "player error ${error.errorCodeName} (${error.errorCode}) httpStatus=$httpStatus " +
+                        "rootCause=\"$rootCause\" ${context()}",
+                    error
+                )
+                notifyUnexpectedStop(
+                    "Playback error: ${error.errorCodeName}" + (httpStatus?.let { " (HTTP $it)" } ?: "") +
+                        "\n$rootCause"
+                )
             }
         })
 
