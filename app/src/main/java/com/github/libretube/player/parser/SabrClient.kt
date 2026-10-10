@@ -1,11 +1,14 @@
 package com.github.libretube.player.parser
 
+import android.util.Base64
 import android.util.Log
 import androidx.annotation.OptIn
+import androidx.core.net.toUri
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.github.libretube.LibreTubeApp
+import com.github.libretube.api.MediaServiceRepository
 import com.github.libretube.api.poToken.PoTokenGenerator
 import com.github.libretube.helpers.DisplayHelper
 import com.github.libretube.player.manifest.Representation
@@ -155,7 +158,7 @@ class SabrClient private constructor(
     /** The URL pointing to the SABR/UMP stream. */
     var url: String,
     /** UStreamer configuration data. */
-    private val ustreamerConfig: ByteString,
+    private var ustreamerConfig: ByteString,
 ) {
 
     /** Generator to create PoTokens. */
@@ -164,6 +167,8 @@ class SabrClient private constructor(
     private var poToken: ByteString? = null
 
     private var fatalError: SabrError? = null
+    /** Whether the last response contained a [UMPPartId.RELOAD_PLAYER_RESPONSE] part. */
+    private var reloadRequested = false
     private val dispatcher = Dispatchers.IO.limitedParallelism(1)
 
     /** Audio format video format */
@@ -337,6 +342,26 @@ class SabrClient private constructor(
      * The data is returned as a pair of lists: (audio segments, video segments).
      */
     private suspend fun media(playbackRequest: PlaybackRequest) {
+        // the server answers requests to an expired URL only with a reload request,
+        // so replace the URL before it expires, e.g. when a paused video is resumed hours later
+        val expiresInSeconds = urlExpiresInSeconds()
+        if (expiresInSeconds != null && expiresInSeconds < URL_EXPIRY_THRESHOLD_SECONDS) {
+            refreshStreamingUrl("url expires in ${expiresInSeconds}s")
+        }
+
+        fetchAndProcessMedia(playbackRequest)
+        if (reloadRequested) {
+            // the server also requests a reload for other reasons, e.g. a configuration change,
+            // which new stream information resolves as well
+            refreshStreamingUrl("server requested player reload")
+            fetchAndProcessMedia(playbackRequest)
+            if (reloadRequested) throw Exception("Server requested player reload")
+        }
+    }
+
+    private suspend fun fetchAndProcessMedia(playbackRequest: PlaybackRequest) {
+        reloadRequested = false
+
         // update currently held UMP data
         val data = fetchStreamData(playbackRequest, audioFormat, videoFormat)
 
@@ -346,6 +371,30 @@ class SabrClient private constructor(
             processPart(part)
         }
         assert(parser.data().isEmpty()) { "Parser has left-over data" }
+    }
+
+    /** Seconds until the `expire` timestamp of [url], or `null` if the URL has none. */
+    private fun urlExpiresInSeconds(): Long? = url.toUri().getQueryParameter("expire")
+        ?.toLongOrNull()?.let { it - System.currentTimeMillis() / 1000 }
+
+    /**
+     * Replaces [url] and [ustreamerConfig] with those of newly fetched stream information.
+     *
+     * The rest of the state, e.g. the initialized formats, the playback cookie and the SABR contexts,
+     * is kept, so that the stream continues where it was.
+     */
+    private fun refreshStreamingUrl(reason: String) {
+        // block instead of suspending, so that no other request runs with the old URL in the meantime
+        val streams = runBlocking { MediaServiceRepository.instance.getStreams(videoId) }
+        val newUrl = streams.serverAbrStreamingUrl
+        val newUstreamerConfig = streams.videoPlaybackUstreamerConfig
+        if (newUrl == null || newUstreamerConfig == null) {
+            throw Exception("Refreshed stream information contains no SABR stream")
+        }
+
+        url = newUrl
+        ustreamerConfig = ByteString.copyFrom(Base64.decode(newUstreamerConfig, Base64.URL_SAFE))
+        Log.i(TAG, "refreshStreamingUrl: Refreshed the streaming URL ($reason)")
     }
 
     /**
@@ -594,10 +643,10 @@ class SabrClient private constructor(
             }
 
             UMPPartId.RELOAD_PLAYER_RESPONSE -> {
-                // this is called if the streams are expired or a new configuration feature needs to be set
-                // in either case, we purposefully crash the player here, as the first one is a rare edge-case
-                // and the second one cannot be handled
-                throw Exception("Server requested player reload")
+                // this is sent if the streams are expired or a new configuration feature needs to be set,
+                // and handled after the response is processed
+                Log.i(TAG, "processPart: Server requested a player reload")
+                reloadRequested = true
             }
 
             UMPPartId.STREAM_PROTECTION_STATUS -> {
@@ -642,6 +691,8 @@ class SabrClient private constructor(
 
     companion object {
         private const val TAG = "SabrStream"
+        /** Time before the URL's expiry at which it is replaced, as in yt-dlp's SABR client. */
+        private const val URL_EXPIRY_THRESHOLD_SECONDS = 60L
         private const val CONTENT_TYPE = "application/x-protobuf"
         private const val ENCODING = "identity"
         private const val ACCEPT = "application/vnd.yt-ump"
