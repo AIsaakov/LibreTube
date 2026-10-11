@@ -921,6 +921,9 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
         // re-enable the autoplay countdown
         setAutoPlayCountdownEnabled(PlayerHelper.autoPlayCountdown)
 
+        // the seek increments may have changed in the settings
+        _binding?.player?.updateSeekIncrementLabels()
+
         // re-enable and load video stream
         setVideoTrackTypeDisabled(false)
     }

@@ -557,12 +557,7 @@ class CustomExoPlayerView(
     }
 
     private fun initRewindAndForward() {
-        val seekForwardText = (PlayerHelper.seekForwardIncrement / 1000).toString()
-        val seekBackText = (PlayerHelper.seekBackIncrement / 1000).toString()
-        doubleTapOverlayBinding.forwardLayout.forwardTV.text = seekForwardText
-        binding.seekButtonForward.forwardTV.text = seekForwardText
-        doubleTapOverlayBinding.rewindLayout.rewindTV.text = seekBackText
-        binding.seekButtonRewind.rewindTV.text = seekBackText
+        updateSeekIncrementLabels()
         binding.seekButtonForward.forwardBTN.setOnClickListener {
             player?.seekBy(PlayerHelper.seekForwardIncrement)
         }
@@ -574,6 +569,18 @@ class CustomExoPlayerView(
             binding.seekButtonForward.forwardBTN.isVisible = !isPlayerLocked
             binding.seekButtonRewind.rewindBTN.isVisible = !isPlayerLocked
         }
+    }
+
+    /**
+     * Show the seek increments on the seek buttons and the double tap overlay.
+     */
+    fun updateSeekIncrementLabels() {
+        val seekForwardText = (PlayerHelper.seekForwardIncrement / 1000).toString()
+        val seekBackText = (PlayerHelper.seekBackIncrement / 1000).toString()
+        doubleTapOverlayBinding.forwardLayout.forwardTV.text = seekForwardText
+        binding.seekButtonForward.forwardTV.text = seekForwardText
+        doubleTapOverlayBinding.rewindLayout.rewindTV.text = seekBackText
+        binding.seekButtonRewind.rewindTV.text = seekBackText
     }
 
     private fun initializeAdvancedOptions() {
