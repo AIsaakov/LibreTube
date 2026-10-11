@@ -154,10 +154,10 @@ class AudioPlayerFragment : Fragment(R.layout.fragment_audio_player), AudioPlaye
         }
 
         binding.rewindBTN.setOnClickListener {
-            playerController?.seekBy(-PlayerHelper.seekIncrement)
+            playerController?.seekBy(-PlayerHelper.seekBackIncrement)
         }
         binding.forwardBTN.setOnClickListener {
-            playerController?.seekBy(PlayerHelper.seekIncrement)
+            playerController?.seekBy(PlayerHelper.seekForwardIncrement)
         }
 
         childFragmentManager.setFragmentResultListener(

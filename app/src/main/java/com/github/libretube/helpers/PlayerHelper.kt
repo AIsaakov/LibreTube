@@ -267,13 +267,19 @@ object PlayerHelper {
             false
         )
 
-    val seekIncrement: Long
-        get() = PreferenceHelper.getString(
-            PreferenceKeys.SEEK_INCREMENT,
-            "10.0"
-        ).toFloat()
-            .roundToInt()
-            .toLong() * 1000
+    val seekForwardIncrement: Long
+        get() = parseSeekIncrementMillis(
+            PreferenceHelper.getString(PreferenceKeys.SEEK_FORWARD_INCREMENT, DEFAULT_SEEK_INCREMENT)
+        )
+
+    val seekBackIncrement: Long
+        get() = parseSeekIncrementMillis(
+            PreferenceHelper.getString(
+                PreferenceKeys.SEEK_BACK_INCREMENT,
+                // settings from before the separate back increment, e.g. a restored backup
+                PreferenceHelper.getString(PreferenceKeys.SEEK_FORWARD_INCREMENT, DEFAULT_SEEK_INCREMENT)
+            )
+        )
 
     private val defaultPlaybackSpeed: Float
         get() = PreferenceHelper.getString(
@@ -380,7 +386,11 @@ object PlayerHelper {
         return RemoteActionCompat(icon, text, text, pendingIntent)
     }
 
-    private fun seekIconWithSpeed(resources: Resources, @DrawableRes resourceId: Int): IconCompat {
+    private fun seekIconWithSpeed(
+        resources: Resources,
+        @DrawableRes resourceId: Int,
+        seekIncrement: Long
+    ): IconCompat {
         val textSize = 15 * resources.displayMetrics.density
         val bitmap = ResourcesCompat.getDrawable(resources, resourceId, null)!!.toBitmap()
         ImageHelper.insertText(bitmap, seekIncrement.div(1000).toString(), 0.5f, 0.65f, textSize)
@@ -401,7 +411,7 @@ object PlayerHelper {
 
         val rewindAction = getRemoteAction(
             activity,
-            seekIconWithSpeed(activity.resources, R.drawable.ic_rewind),
+            seekIconWithSpeed(activity.resources, R.drawable.ic_rewind, seekBackIncrement),
             R.string.rewind,
             PlayerEvent.Rewind
         )
@@ -422,7 +432,7 @@ object PlayerHelper {
 
         val forwardAction = getRemoteAction(
             activity,
-            seekIconWithSpeed(activity.resources, R.drawable.ic_forward),
+            seekIconWithSpeed(activity.resources, R.drawable.ic_forward, seekForwardIncrement),
             R.string.forward,
             PlayerEvent.Forward
         )
@@ -870,12 +880,12 @@ object PlayerHelper {
             }
 
             PlayerEvent.Forward -> {
-                player.seekBy(seekIncrement)
+                player.seekBy(seekForwardIncrement)
                 true
             }
 
             PlayerEvent.Rewind -> {
-                player.seekBy(-seekIncrement)
+                player.seekBy(-seekBackIncrement)
                 true
             }
 
@@ -883,3 +893,14 @@ object PlayerHelper {
         }
     }
 }
+
+/**
+ * The default seek increment in seconds, as stored by the seek increment sliders.
+ */
+const val DEFAULT_SEEK_INCREMENT = "10.0"
+
+/**
+ * Convert a seek increment stored in seconds, such as "10.0", to milliseconds.
+ */
+fun parseSeekIncrementMillis(seconds: String): Long =
+    seconds.toFloat().roundToInt().toLong() * 1000
