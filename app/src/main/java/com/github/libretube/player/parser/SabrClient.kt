@@ -98,6 +98,9 @@ data class Segment(
 internal fun secondsUntilUrlExpiry(url: String, nowSeconds: Long): Long? =
     url.toHttpUrlOrNull()?.queryParameter("expire")?.toLongOrNull()?.let { it - nowSeconds }
 
+/** Thrown when the server refuses the stream until it receives a valid poToken. */
+class AttestationRequiredException : Exception("Attestation required")
+
 /**
  * An initialized format within a video stream.
  */
@@ -176,6 +179,8 @@ class SabrClient private constructor(
     private var fatalError: SabrError? = null
     /** Whether the last response contained a [UMPPartId.RELOAD_PLAYER_RESPONSE] part. */
     private var reloadRequested = false
+    /** Whether a new session was started after an attestation refusal, without a successful request since. */
+    private var attestationRecoveryAttempted = false
     private val dispatcher = Dispatchers.IO.limitedParallelism(1)
 
     /** Audio format video format */
@@ -356,6 +361,21 @@ class SabrClient private constructor(
             refreshStreamingUrl("url expires in ${expiresInSeconds}s")
         }
 
+        try {
+            fetchAndProcessMediaWithReload(playbackRequest)
+        } catch (e: AttestationRequiredException) {
+            if (attestationRecoveryAttempted) throw e
+            attestationRecoveryAttempted = true
+            // the server sometimes refuses every poToken of a session, while a new session of the
+            // same video, as when reopening it, passes without one
+            startNewSession("attestation required")
+            fetchAndProcessMediaWithReload(playbackRequest)
+        }
+        // allow another recovery once a request after the last one succeeded
+        attestationRecoveryAttempted = false
+    }
+
+    private suspend fun fetchAndProcessMediaWithReload(playbackRequest: PlaybackRequest) {
         fetchAndProcessMedia(playbackRequest)
         if (reloadRequested) {
             // the server also requests a reload for other reasons, e.g. a configuration change,
@@ -364,6 +384,23 @@ class SabrClient private constructor(
             fetchAndProcessMedia(playbackRequest)
             if (reloadRequested) throw Exception("Server requested player reload")
         }
+    }
+
+    /**
+     * Continues the stream in a new session: new stream information, no poToken and none of the
+     * state the server sent for the old session.
+     *
+     * The initialized formats are kept, so that the player's buffered data stays valid.
+     */
+    private fun startNewSession(reason: String) {
+        refreshStreamingUrl(reason)
+        poToken = null
+        playbackCookie = null
+        backoffTime = null
+        sabrContexts.clear()
+        activeSabrContexts.clear()
+        requestNumber = 1
+        Log.i(TAG, "startNewSession: Started a new session ($reason)")
     }
 
     private suspend fun fetchAndProcessMedia(playbackRequest: PlaybackRequest) {
@@ -667,7 +704,7 @@ class SabrClient private constructor(
                     }
                     // we assume that we got an attestation pending warning before and already tried to regenerate the token,
                     // but it's not accepted, so we bail
-                    3 -> throw Exception("Attestation required")
+                    3 -> throw AttestationRequiredException()
                     else -> Log.e(TAG, "processPart: Unknown StreamProtectionStatus (${status.status})")
                 }
             }
