@@ -113,6 +113,6 @@ class PinchZoomController(
     }
 
     companion object {
-        private const val RESET_ANIMATION_DURATION = 150L
+        private const val RESET_ANIMATION_DURATION = 200L
     }
 }

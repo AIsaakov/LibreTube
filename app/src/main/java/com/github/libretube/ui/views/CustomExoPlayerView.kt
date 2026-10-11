@@ -229,6 +229,11 @@ class CustomExoPlayerView(
 
         binding.fullscreen.setOnClickListener { playerCallback.toggleFullscreen() }
 
+        backgroundBinding.zoomLabel.setOnClickListener {
+            pinchZoomController.reset(animate = true)
+            hideZoomLabel()
+        }
+
         resizeMode = resizeModePref
 
         // prevent the controls from disappearing while scrubbing the time bar
@@ -541,6 +546,8 @@ class CustomExoPlayerView(
         if (isFullscreen()) {
             toggleSystemBars(false)
         }
+
+        if (!isPinching) hideZoomLabel()
     }
 
     override fun showController() {
@@ -556,6 +563,11 @@ class CustomExoPlayerView(
 
         if (isFullscreen() && !isPlayerLocked) {
             toggleSystemBars(true)
+        }
+
+        // the zoom label resets the zoom when tapped, so it is shown along with the controls
+        if (isFreeZoomEnabled && pinchZoomController.isZoomed) {
+            showZoomLabel(withControls = true)
         }
     }
 
@@ -1306,28 +1318,63 @@ class CustomExoPlayerView(
      */
     private val isFreeZoomEnabled get() = PlayerHelper.pinchGestureEnabled && isFullscreen()
 
+    private var isPinching = false
+
     override fun onScaleBegin() {
-        if (isFreeZoomEnabled) pinchZoomController.onScaleBegin()
+        if (!isFreeZoomEnabled) return
+
+        isPinching = true
+        pinchZoomController.onScaleBegin()
     }
 
     override fun onScale(factor: Float, focusX: Float, focusY: Float) {
         if (!isFreeZoomEnabled) return
 
         pinchZoomController.onScale(factor, focusX, focusY)
-        runnableHandler.removeCallbacksAndMessages(HIDE_ZOOM_LABEL_TOKEN)
-        backgroundBinding.zoomLabel.text = if (pinchZoomController.isAtFill) {
-            context.getString(R.string.zoomed_to_fill)
-        } else {
-            context.getString(R.string.zoom_factor, pinchZoomController.scale)
-        }
-        backgroundBinding.zoomLabel.isVisible = true
+        showZoomLabel(withControls = isControllerFullyVisible)
     }
 
     override fun onScaleEnd() {
+        isPinching = false
+        // while the controls are visible, the label stays until they hide
+        if (isControllerFullyVisible) return
+
         runnableHandler.postDelayed(ZOOM_LABEL_HIDE_DELAY, HIDE_ZOOM_LABEL_TOKEN) {
             backgroundBinding.zoomLabel.isGone = true
         }
     }
+
+    /**
+     * @param withControls whether the controls are shown with the label, in which case the label
+     * moves below their top bar
+     */
+    private fun showZoomLabel(withControls: Boolean) {
+        runnableHandler.removeCallbacksAndMessages(HIDE_ZOOM_LABEL_TOKEN)
+        val label = backgroundBinding.zoomLabel
+        label.text = if (pinchZoomController.isAtFill) {
+            context.getString(R.string.zoomed_to_fill)
+        } else {
+            context.getString(R.string.zoom_factor, pinchZoomController.scale)
+        }
+        label.isVisible = true
+        // measured after layout, since the top bar isn't laid out yet while the controls appear
+        label.post {
+            label.translationY = if (withControls) {
+                val topBarBottom =
+                    binding.topBar.let { it.getYInWindow() + it.height } - getYInWindow()
+                (topBarBottom - label.top).coerceAtLeast(0).toFloat()
+            } else {
+                0f
+            }
+        }
+    }
+
+    private fun hideZoomLabel() {
+        runnableHandler.removeCallbacksAndMessages(HIDE_ZOOM_LABEL_TOKEN)
+        backgroundBinding.zoomLabel.isGone = true
+    }
+
+    private fun View.getYInWindow() = IntArray(2).also { getLocationInWindow(it) }[1]
 
     override fun onPan(dx: Float, dy: Float): Boolean {
         if (!isFreeZoomEnabled || !pinchZoomController.isZoomed) return false
