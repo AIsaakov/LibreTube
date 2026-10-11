@@ -66,6 +66,7 @@ object PreferenceKeys {
     const val DOUBLE_TAP_TO_SEEK = "double_tap_seek"
     const val LONG_PRESS_FAST_FORWARD = "long_press_fast_forward"
     const val ALTERNATIVE_PIP_CONTROLS = "alternative_pip_controls"
+    const val TRACK_KEYS_SEEK = "track_keys_seek"
     const val SKIP_SILENCE = "skip_silence"
     const val AUTOPLAY_COUNTDOWN = "autoplay_countdown"
     const val AUTO_FULLSCREEN_SHORTS = "auto_fullscreen_shorts"

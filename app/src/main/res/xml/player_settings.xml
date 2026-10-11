@@ -76,6 +76,13 @@
             app:key="autoplay_countdown"
             app:title="@string/autoplay_countdown" />
 
+        <SwitchPreferenceCompat
+            android:icon="@drawable/ic_headphones"
+            android:summary="@string/track_keys_seek_summary"
+            app:defaultValue="false"
+            app:key="track_keys_seek"
+            app:title="@string/track_keys_seek" />
+
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/captions">

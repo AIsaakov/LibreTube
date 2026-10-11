@@ -376,6 +376,8 @@
     <string name="copy_tooltip">Copy</string>
     <string name="autoplay_countdown">Autoplay countdown</string>
     <string name="autoplay_countdown_summary">Show a 5s countdown before auto-playing the next video</string>
+    <string name="track_keys_seek">Seek with next and previous track buttons</string>
+    <string name="track_keys_seek_summary">Use next and previous on connected devices to seek instead of skipping videos</string>
     <string name="playing_next">Playing next in %1$s</string>
     <string name="auto_fullscreen_shorts">Auto fullscreen on short videos</string>
     <string name="channel_groups">Channel groups</string>
