@@ -1,0 +1,2 @@
+# keep LF line endings, since bash fails on scripts with CRLF
+* text eol=lf
