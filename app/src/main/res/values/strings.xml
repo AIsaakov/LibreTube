@@ -332,7 +332,9 @@
     <string name="swipe_controls">Swipe controls</string>
     <string name="swipe_controls_summary">Swipe to adjust the brightness and volume while in fullscreen mode</string>
     <string name="pinch_control">Pinch control</string>
-    <string name="pinch_control_summary">Use pinch gesture to zoom in/out</string>
+    <string name="zoom_factor">%1$.1fx</string>
+    <string name="zoomed_to_fill">Zoomed to fill</string>
+    <string name="pinch_control_summary">Use pinch gesture to zoom in/out. In fullscreen, zoom freely and drag to move the zoomed video</string>
     <string name="comments_disabled">Comments are disabled by the uploader.</string>
     <string name="no_comments_available">This video has no comments.</string>
     <string name="theme_monochrome">Minimalistic monochrome</string>

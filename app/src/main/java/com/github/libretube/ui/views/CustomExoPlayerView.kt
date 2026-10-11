@@ -12,6 +12,7 @@ import android.text.format.DateUtils
 import android.util.AttributeSet
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.View
 import android.view.Window
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -64,6 +65,7 @@ import com.github.libretube.obj.VideoResolution
 import com.github.libretube.services.AbstractPlayerService
 import com.github.libretube.ui.base.BaseActivity
 import com.github.libretube.ui.controllers.FullscreenGestureAnimationController
+import com.github.libretube.ui.controllers.PinchZoomController
 import com.github.libretube.ui.dialogs.SubmitDeArrowDialog
 import com.github.libretube.ui.dialogs.SubmitSegmentDialog
 import com.github.libretube.ui.extensions.toggleSystemBars
@@ -107,6 +109,13 @@ class CustomExoPlayerView(
     private lateinit var chaptersViewModel: ChaptersViewModel
     private lateinit var seekBarListener: TimeBar.OnScrubListener
     private var fullscreenGestureAnimationController: FullscreenGestureAnimationController
+    private val pinchZoomController = PinchZoomController(this, backgroundBinding.exoContentFrame) {
+        listOfNotNull<View>(
+            subtitleView,
+            findViewById(androidx.media3.ui.R.id.exo_buffering),
+            findViewById(androidx.media3.ui.R.id.exo_error_message)
+        )
+    }
     private var chaptersBottomSheet: ChaptersBottomSheet? = null
     private var scrubbingTimeBar = false
 
@@ -926,6 +935,7 @@ class CustomExoPlayerView(
 
     override fun setResizeMode(resizeMode: Int) {
         super.setResizeMode(resizeMode)
+        pinchZoomController.reset(animate = false)
         // automatically remember the resize mode for the next session
         resizeModePref = resizeMode
     }
@@ -1291,8 +1301,43 @@ class CustomExoPlayerView(
         gestureViewBinding.volumeControlView.isGone = true
     }
 
+    /**
+     * Whether pinching zooms freely instead of switching between the Fit and Zoom resize modes.
+     */
+    private val isFreeZoomEnabled get() = PlayerHelper.pinchGestureEnabled && isFullscreen()
+
+    override fun onScaleBegin() {
+        if (isFreeZoomEnabled) pinchZoomController.onScaleBegin()
+    }
+
+    override fun onScale(factor: Float, focusX: Float, focusY: Float) {
+        if (!isFreeZoomEnabled) return
+
+        pinchZoomController.onScale(factor, focusX, focusY)
+        runnableHandler.removeCallbacksAndMessages(HIDE_ZOOM_LABEL_TOKEN)
+        backgroundBinding.zoomLabel.text = if (pinchZoomController.isAtFill) {
+            context.getString(R.string.zoomed_to_fill)
+        } else {
+            context.getString(R.string.zoom_factor, pinchZoomController.scale)
+        }
+        backgroundBinding.zoomLabel.isVisible = true
+    }
+
+    override fun onScaleEnd() {
+        runnableHandler.postDelayed(ZOOM_LABEL_HIDE_DELAY, HIDE_ZOOM_LABEL_TOKEN) {
+            backgroundBinding.zoomLabel.isGone = true
+        }
+    }
+
+    override fun onPan(dx: Float, dy: Float): Boolean {
+        if (!isFreeZoomEnabled || !pinchZoomController.isZoomed) return false
+
+        pinchZoomController.onPan(dx, dy)
+        return true
+    }
+
     override fun onZoom() {
-        if (!PlayerHelper.pinchGestureEnabled) return
+        if (!PlayerHelper.pinchGestureEnabled || isFullscreen()) return
         resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
 
         if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -1301,7 +1346,7 @@ class CustomExoPlayerView(
     }
 
     override fun onMinimize() {
-        if (!PlayerHelper.pinchGestureEnabled) return
+        if (!PlayerHelper.pinchGestureEnabled || isFullscreen()) return
         resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
 
         subtitleView?.setBottomPaddingFraction(SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION)
@@ -1354,6 +1399,7 @@ class CustomExoPlayerView(
                 subtitleView?.setBottomPaddingFraction(SUBTITLE_BOTTOM_PADDING_FRACTION)
             }
         } else {
+            pinchZoomController.reset(animate = true)
             if (PlayerHelper.swipeGestureEnabled) {
                 brightnessHelper.resetToSystemBrightness()
             }
@@ -1418,6 +1464,12 @@ class CustomExoPlayerView(
         return true
     }
 
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        // the limits of the zoom and pan depend on the view's size
+        pinchZoomController.reset(animate = false)
+    }
+
     override fun getViewMeasures(): Pair<Int, Int> {
         return width to height
     }
@@ -1457,6 +1509,9 @@ class CustomExoPlayerView(
             // if the video is live, the remaining time is displayed instead of duration
             updateDisplayedDurationType()
         }
+        if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) {
+            pinchZoomController.reset(animate = false)
+        }
         if (events.contains(Player.EVENT_MEDIA_METADATA_CHANGED)) {
             // new video started
             alreadySetDefaultSubtitle = false
@@ -1472,10 +1527,12 @@ class CustomExoPlayerView(
         private const val HIDE_FORWARD_BUTTON_TOKEN = "hideForwardButton"
         private const val HIDE_REWIND_BUTTON_TOKEN = "hideRewindButton"
         private const val UPDATE_POSITION_TOKEN = "updatePosition"
+        private const val HIDE_ZOOM_LABEL_TOKEN = "hideZoomLabel"
 
         private const val SUBTITLE_BOTTOM_PADDING_FRACTION = 0.158f
         private const val ANIMATION_DURATION = 100L
         private const val AUTO_HIDE_CONTROLLER_DELAY = 2000L
+        private const val ZOOM_LABEL_HIDE_DELAY = 1000L
         private val LANDSCAPE_MARGIN_HORIZONTAL = 20f.dpToPx()
         private val LANDSCAPE_MARGIN_HORIZONTAL_NONE = 0f.dpToPx()
     }
