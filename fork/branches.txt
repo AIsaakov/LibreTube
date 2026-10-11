@@ -7,3 +7,4 @@ fix/sabr-url-expiry
 debug/diagnostics
 feat/separate-seek-increments
 feat/pinch-zoom
+chore/fork-app-name
