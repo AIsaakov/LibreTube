@@ -52,6 +52,13 @@
             app:valueTo="60.0" />
 
         <SwitchPreferenceCompat
+            android:icon="@drawable/ic_next_large"
+            android:summary="@string/track_keys_seek_summary"
+            app:defaultValue="false"
+            app:key="track_keys_seek"
+            app:title="@string/track_keys_seek" />
+
+        <SwitchPreferenceCompat
             android:disableDependentsState="true"
             android:icon="@drawable/ic_rotating_circle"
             android:summary="@string/autoRotatePlayer_summary"
@@ -75,13 +82,6 @@
             app:defaultValue="false"
             app:key="autoplay_countdown"
             app:title="@string/autoplay_countdown" />
-
-        <SwitchPreferenceCompat
-            android:icon="@drawable/ic_headphones"
-            android:summary="@string/track_keys_seek_summary"
-            app:defaultValue="false"
-            app:key="track_keys_seek"
-            app:title="@string/track_keys_seek" />
 
     </PreferenceCategory>
 
