@@ -1,0 +1,7 @@
+# Branches merged into fork-main by fork/rebuild-fork-main.sh, in this order.
+# Lines starting with # are ignored.
+fix/activity-recreation
+fix/sabr-video-download
+fix/forced-theme-webview
+fix/sabr-url-expiry
+debug/diagnostics
