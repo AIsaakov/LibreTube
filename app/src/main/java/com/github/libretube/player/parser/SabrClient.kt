@@ -3,7 +3,6 @@ package com.github.libretube.player.parser
 import android.util.Base64
 import android.util.Log
 import androidx.annotation.OptIn
-import androidx.core.net.toUri
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
@@ -20,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import misc.Common.FormatId
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -90,6 +90,13 @@ data class Segment(
      */
     fun length(): Int = data.sumOf { it.size }
 }
+
+/**
+ * Seconds from [nowSeconds] until the `expire` timestamp in the query of [url],
+ * or `null` if the URL has none.
+ */
+internal fun secondsUntilUrlExpiry(url: String, nowSeconds: Long): Long? =
+    url.toHttpUrlOrNull()?.queryParameter("expire")?.toLongOrNull()?.let { it - nowSeconds }
 
 /**
  * An initialized format within a video stream.
@@ -374,8 +381,7 @@ class SabrClient private constructor(
     }
 
     /** Seconds until the `expire` timestamp of [url], or `null` if the URL has none. */
-    private fun urlExpiresInSeconds(): Long? = url.toUri().getQueryParameter("expire")
-        ?.toLongOrNull()?.let { it - System.currentTimeMillis() / 1000 }
+    private fun urlExpiresInSeconds(): Long? = secondsUntilUrlExpiry(url, System.currentTimeMillis() / 1000)
 
     /**
      * Replaces [url] and [ustreamerConfig] with those of newly fetched stream information.
