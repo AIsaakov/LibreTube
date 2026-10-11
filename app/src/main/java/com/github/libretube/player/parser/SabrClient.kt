@@ -89,6 +89,19 @@ data class Segment(
 }
 
 /**
+ * Drops the oldest of [segments] until their media data is at most [maxBytes], but keeps at least one.
+ *
+ * The player doesn't retrieve the segments of a format it isn't playing, so this keeps such a format
+ * from holding an unbounded amount of memory. Dropped segments are fetched again if the player
+ * requests them later.
+ */
+internal fun trimDownloadedSegments(segments: MutableMap<Long, Segment>, maxBytes: Long) {
+    while (segments.size > 1 && segments.values.sumOf { it.length().toLong() } > maxBytes) {
+        segments.remove(segments.keys.first())
+    }
+}
+
+/**
  * An initialized format within a video stream.
  */
 private data class InitializedFormat(
@@ -526,14 +539,7 @@ class SabrClient private constructor(
                 val format = initializedFormats[segment.header.itag]!!
                 format.downloadedSegments[segment.sequenceNumber] = segment
 
-                // drop the oldest segments if the player doesn't retrieve them, so that a format
-                // that isn't played can't hold an unbounded amount of memory, they are fetched
-                // again if the player requests them later
-                while (format.downloadedSegments.size > 1 &&
-                    format.downloadedSegments.values.sumOf { it.length().toLong() } > MAX_DOWNLOADED_BYTES
-                ) {
-                    format.downloadedSegments.remove(format.downloadedSegments.keys.first())
-                }
+                trimDownloadedSegments(format.downloadedSegments, MAX_DOWNLOADED_BYTES)
 
                 if (segment.header.isInitSeg) {
                     format.initSegment = segment
