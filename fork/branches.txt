@@ -8,3 +8,5 @@ debug/diagnostics
 feat/separate-seek-increments
 feat/pinch-zoom
 chore/fork-app-name
+fix/media-key-seek
+feat/earbud-seek
