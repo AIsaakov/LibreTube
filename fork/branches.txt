@@ -5,3 +5,5 @@ fix/sabr-video-download
 fix/forced-theme-webview
 fix/sabr-url-expiry
 debug/diagnostics
+feat/separate-seek-increments
+feat/pinch-zoom
