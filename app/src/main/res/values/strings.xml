@@ -372,6 +372,7 @@
     <string name="mark_as_watched">Mark as watched</string>
     <string name="category">Category</string>
     <string name="stats_for_nerds">Stats for nerds</string>
+    <string name="open_in_youtube_app">Open in YouTube app</string>
     <string name="video_id">Video ID</string>
     <string name="copy_tooltip">Copy</string>
     <string name="autoplay_countdown">Autoplay countdown</string>
