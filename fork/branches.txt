@@ -12,3 +12,4 @@ fix/media-key-seek
 feat/earbud-seek
 feat/open-in-youtube-app
 fix/home-tab-content-refresh
+feat/fullscreen-after-screen-off
