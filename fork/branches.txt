@@ -11,3 +11,4 @@ chore/fork-app-name
 fix/media-key-seek
 feat/earbud-seek
 feat/open-in-youtube-app
+fix/home-tab-content-refresh
