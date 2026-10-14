@@ -146,6 +146,67 @@ class VideoZoomTransformTest {
         assertEquals(0f, transform.translationY, DELTA)
     }
 
+    // the pillarboxed screen rotated to portrait: the 16:9 video is 1012.5x569.53 inside
+    // 1012.5x2250
+    private fun VideoZoomTransform.rotateToPortrait() = setSizes(1012.5f, 569.53f, 1012.5f, 2250f)
+
+    @Test
+    fun rotationKeepsTheScaleAndTheCentredPoint() {
+        val transform = pillarboxed()
+        transform.pinch(2f)
+        transform.pinch(2f)
+        transform.panBy(300f, 100f)
+        // the point at the viewport's centre, as a fraction of the frame's size
+        val centreXBefore = -transform.translationX / (transform.scale * 1800f)
+
+        transform.rotateToPortrait()
+        assertEquals(2.5f, transform.scale, DELTA)
+        assertEquals(centreXBefore, -transform.translationX / (transform.scale * 1012.5f), DELTA)
+        // 1423.83px tall at 2.5x, inside a 2250px tall viewport, so centred
+        assertEquals(0f, transform.translationY, DELTA)
+    }
+
+    @Test
+    fun rotationKeepsTheVideoZoomedToFill() {
+        val transform = pillarboxed()
+        transform.pinch(2f)
+        assertTrue(transform.isAtFill)
+
+        transform.rotateToPortrait()
+        assertTrue(transform.isAtFill)
+        assertEquals(2250f / 569.53f, transform.scale, DELTA)
+    }
+
+    @Test
+    fun rotationLeavesAnUnzoomedVideoUnzoomed() {
+        val transform = pillarboxed()
+        transform.rotateToPortrait()
+        assertFalse(transform.isZoomed)
+        assertEquals(0f, transform.translationX, DELTA)
+        assertEquals(0f, transform.translationY, DELTA)
+    }
+
+    @Test
+    fun savedZoomIsRestoredAfterAReset() {
+        val transform = pillarboxed()
+        transform.pinch(2f)
+        transform.pinch(2f)
+        transform.panBy(300f, 100f)
+        val translationX = transform.translationX
+        val translationY = transform.translationY
+
+        val state = transform.save()
+        transform.reset()
+        // fullscreen left in portrait and entered again in landscape
+        transform.rotateToPortrait()
+        transform.setSizes(1800f, 1012.5f, 2250f, 1012.5f)
+        transform.restore(state)
+
+        assertEquals(2.5f, transform.scale, DELTA)
+        assertEquals(translationX, transform.translationX, DELTA)
+        assertEquals(translationY, transform.translationY, DELTA)
+    }
+
     private companion object {
         const val DELTA = 0.01f
     }
