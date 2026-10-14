@@ -41,11 +41,50 @@ class VideoZoomTransform {
 
     val isAtFill get() = abs(scale - fillScale) <= EPSILON
 
+    /**
+     * Sets the sizes the zoom and pan limits depend on. When the sizes change while zoomed, as on
+     * a screen rotation, the zoom is kept as [restore] describes.
+     */
     fun setSizes(frameWidth: Float, frameHeight: Float, viewportWidth: Float, viewportHeight: Float) {
+        val state = save()
         this.frameWidth = frameWidth
         this.frameHeight = frameHeight
         this.viewportWidth = viewportWidth
         this.viewportHeight = viewportHeight
+        restore(state)
+    }
+
+    /**
+     * The zoom in a form that doesn't depend on the sizes, so that it can be applied to a frame
+     * and a viewport of other sizes.
+     *
+     * @param centreX the point of the video at the viewport's centre, as a fraction of the frame's
+     * width from the frame's centre
+     * @param centreY the same as [centreX], as a fraction of the frame's height
+     */
+    data class State(
+        val scale: Float,
+        val centreX: Float,
+        val centreY: Float,
+        val isAtFill: Boolean,
+    )
+
+    fun save() = State(
+        scale = scale,
+        centreX = if (frameWidth > 0f) -translationX / (scale * frameWidth) else 0f,
+        centreY = if (frameHeight > 0f) -translationY / (scale * frameHeight) else 0f,
+        isAtFill = isZoomed && isAtFill,
+    )
+
+    /**
+     * Applies a zoom saved with [save]: the scale is kept and the saved point of the video is moved
+     * to the viewport's centre, as far as the pan limits allow. A video zoomed to fill is zoomed to
+     * fill the current viewport instead of keeping its scale.
+     */
+    fun restore(state: State) {
+        scale = if (state.isAtFill) fillScale else state.scale.coerceIn(1f, maxScale)
+        translationX = -state.centreX * scale * frameWidth
+        translationY = -state.centreY * scale * frameHeight
         clampTranslation()
     }
 

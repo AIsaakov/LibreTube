@@ -1320,6 +1320,18 @@ class CustomExoPlayerView(
 
     private var isPinching = false
 
+    /**
+     * The orientation of the screen while the player was last laid out in fullscreen.
+     */
+    private var fullscreenOrientation = Configuration.ORIENTATION_UNDEFINED
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        // fullscreen turns between portrait and landscape when Auto-fullscreen is off and
+        // Fullscreen orientation is Auto-rotation
+        if (isFullscreen()) fullscreenOrientation = resources.configuration.orientation
+    }
+
     override fun onScaleBegin() {
         if (!isFreeZoomEnabled) return
 
@@ -1435,6 +1447,8 @@ class CustomExoPlayerView(
 
     override fun onFullscreenChange(isFullscreen: Boolean) {
         if (isFullscreen) {
+            fullscreenOrientation = resources.configuration.orientation
+            pinchZoomController.restoreRemembered()
             if (PlayerHelper.swipeGestureEnabled) {
                 brightnessHelper.restoreSavedBrightness()
             }
@@ -1446,7 +1460,13 @@ class CustomExoPlayerView(
                 subtitleView?.setBottomPaddingFraction(SUBTITLE_BOTTOM_PADDING_FRACTION)
             }
         } else {
-            pinchZoomController.reset(animate = true)
+            // a rotation that leaves fullscreen has already changed the orientation, while leaving
+            // with the fullscreen button changes it afterwards, if at all
+            if (resources.configuration.orientation != fullscreenOrientation) {
+                pinchZoomController.rememberAndReset(animate = true)
+            } else {
+                pinchZoomController.reset(animate = true)
+            }
             if (PlayerHelper.swipeGestureEnabled) {
                 brightnessHelper.resetToSystemBrightness()
             }
@@ -1509,12 +1529,6 @@ class CustomExoPlayerView(
         }
 
         return true
-    }
-
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        // the limits of the zoom and pan depend on the view's size
-        pinchZoomController.reset(animate = false)
     }
 
     override fun getViewMeasures(): Pair<Int, Int> {
