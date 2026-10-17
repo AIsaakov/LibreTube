@@ -254,6 +254,7 @@ abstract class AbstractPlayerService : MediaLibraryService(), MediaLibrarySessio
         exoPlayer?.clearMediaItems()
 
         this.videoId = videoId
+        com.github.libretube.helpers.DebugDiagnostics.currentVideoId = videoId
 
         CoroutineScope(Dispatchers.IO).launch {
             startPlayback()
@@ -349,6 +350,7 @@ abstract class AbstractPlayerService : MediaLibraryService(), MediaLibrarySessio
 
     override fun onCreate() {
         super.onCreate()
+        com.github.libretube.helpers.DebugDiagnostics.log("${javaClass.simpleName}.onCreate")
 
         notificationProvider = NowPlayingNotification(this)
         setMediaNotificationProvider(notificationProvider!!)
@@ -399,6 +401,7 @@ abstract class AbstractPlayerService : MediaLibraryService(), MediaLibrarySessio
         // prevent android from putting LibreTube to sleep when locked
         player.setWakeMode(if (isOfflinePlayer) C.WAKE_MODE_LOCAL else C.WAKE_MODE_NETWORK)
         player.addListener(playerListener)
+        com.github.libretube.helpers.DebugDiagnostics.attachPlayer(player) { isAudioOnlyPlayer }
         this.exoPlayer = player
 
         val forwardingPlayer = MediaSessionForwarder(player)
@@ -472,6 +475,8 @@ abstract class AbstractPlayerService : MediaLibraryService(), MediaLibrarySessio
     }
 
     override fun onDestroy() {
+        com.github.libretube.helpers.DebugDiagnostics.log("${javaClass.simpleName}.onDestroy", Throwable("caller"))
+        com.github.libretube.helpers.DebugDiagnostics.onStopRequested()
         // wait for a short time before killing the mediaSession
         // as the playerController must be released before we finish the session
         // otherwise there would be a

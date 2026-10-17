@@ -186,6 +186,8 @@ object NavigationHelper {
         intent?.flags = Intent.FLAG_ACTIVITY_CLEAR_TASK
         context.startActivity(intent)
         // kill the old application
+        // the stack trace shows what requested the restart, e.g. the restart dialog after a settings change
+        DebugDiagnostics.log("self restart: killing own process pid=${Process.myPid()}", Throwable("restart requested"))
         Process.killProcess(Process.myPid())
     }
 }

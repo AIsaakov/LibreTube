@@ -208,6 +208,7 @@ class SabrClient private constructor(
     /** Whether a new session was started after an attestation refusal, without a successful request since. */
     private var attestationRecoveryAttempted = false
     private val dispatcher = Dispatchers.IO.limitedParallelism(1)
+    private var lastProtectionStatus: Int? = null
 
     /** Audio format video format */
     private var audioFormat: Representation? = null
@@ -220,7 +221,20 @@ class SabrClient private constructor(
         ByteString.copyFrom(manifest.videoPlaybackUstreamerConfig)
     )
 
+    /** Creation time, which is shortly after the stream information was fetched. */
+    private val createdMs = System.currentTimeMillis()
+
+    /** Age of this client and time until the stream URL's `expire` timestamp, for diagnostics. */
+    fun urlTiming(): String {
+        val uri = android.net.Uri.parse(url)
+        val expiresIn = uri.getQueryParameter("expire")?.toLongOrNull()
+            ?.let { it - System.currentTimeMillis() / 1000 }
+        return "clientAge=${(System.currentTimeMillis() - createdMs) / 1000}s " +
+            "urlExpiresIn=${expiresIn?.let { "${it}s" }} client=${uri.getQueryParameter("c")} host=${uri.host}"
+    }
+
     init {
+        com.github.libretube.helpers.DebugDiagnostics.sabr("sabr client created videoId=$videoId ${urlTiming()}")
         poTokenGenerator.getCachedWebClientPoToken()?.let {
             poToken = ByteString.copyFrom(it.streamingDataPoToken!!.toByteArray())
         }
@@ -380,6 +394,14 @@ class SabrClient private constructor(
                     initializedFormats.keys.retainAll { audioFormat?.stream?.itag == it || videoFormat?.stream?.itag == it }
                 }
                 format = format ?: initializedFormats[itag]
+                com.github.libretube.helpers.DebugDiagnostics.sabr(
+                    "request itag=$itag segment=${playbackRequest.segment} " +
+                        "videoFormat=${videoFormat?.stream?.itag} unread=" +
+                        initializedFormats.values.joinToString(" ") { f ->
+                            "${f.id.itag}:${f.downloadedSegments.size}seg/" +
+                                "${f.downloadedSegments.values.sumOf { it.length().toLong() } / 1024}KB"
+                        }
+                )
                 return@withContext format?.getSegment(playbackRequest.segment)
             }
         }
@@ -701,6 +723,7 @@ class SabrClient private constructor(
             UMPPartId.SABR_REDIRECT -> {
                 val redirect = SabrRedirect.parseFrom(part.data)
                 url = redirect.url
+                com.github.libretube.helpers.DebugDiagnostics.sabr("redirect ${urlTiming()}")
             }
 
             UMPPartId.SABR_CONTEXT_UPDATE -> {
@@ -754,6 +777,13 @@ class SabrClient private constructor(
 
             UMPPartId.STREAM_PROTECTION_STATUS -> {
                 val status = StreamProtectionStatus.parseFrom(part.data)
+                if (status.status != lastProtectionStatus || status.status != 1) {
+                    com.github.libretube.helpers.DebugDiagnostics.sabr(
+                        "protection status ${status.status} (was $lastProtectionStatus) " +
+                            "sending token ${com.github.libretube.helpers.DebugDiagnostics.fingerprint(poToken?.toStringUtf8())} ${urlTiming()}"
+                    )
+                    lastProtectionStatus = status.status
+                }
                 // https://github.com/coletdjnz/yt-dlp-dev/blob/5c0c2963396009a92101bc6e038b61844368409d/yt_dlp/extractor/youtube/_streaming/sabr/part.py
                 when (status.status) {
                     1 -> Log.i(TAG, "processPart: [StreamProtectionStatus] OK")

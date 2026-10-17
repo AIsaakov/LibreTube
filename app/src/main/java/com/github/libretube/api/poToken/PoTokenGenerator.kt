@@ -43,6 +43,13 @@ class PoTokenGenerator : PoTokenProvider {
         val (poTokenGenerator, visitorData, hasBeenRecreated) =
             synchronized(WebPoTokenGenLock) {
                 val shouldRecreate = webPoTokenGenerator == null || forceRecreate || webPoTokenGenerator!!.isExpired()
+                if (shouldRecreate) {
+                    com.github.libretube.helpers.DebugDiagnostics.sabr(
+                        "poToken generator ${System.identityHashCode(this)} recreating: " +
+                            "missing=${webPoTokenGenerator == null} forced=$forceRecreate " +
+                            "expired=${webPoTokenGenerator?.isExpired()} videoId=$videoId"
+                    )
+                }
 
                 if (shouldRecreate) {
                     val innertubeClientRequestInfo = InnertubeClientRequestInfo.ofWebClient()
@@ -76,6 +83,7 @@ class PoTokenGenerator : PoTokenProvider {
                 )
             }
 
+        val generationStartMs = System.currentTimeMillis()
         val poToken = try {
             // Not using synchronized here, since poTokenGenerator would be able to generate
             // multiple poTokens in parallel if needed. The only important thing is for exactly one
@@ -84,6 +92,10 @@ class PoTokenGenerator : PoTokenProvider {
                 poTokenGenerator.generatePoToken(videoId)
             }
         } catch (throwable: Throwable) {
+            com.github.libretube.helpers.DebugDiagnostics.sabr(
+                "poToken generator ${System.identityHashCode(this)} failed after " +
+                    "${System.currentTimeMillis() - generationStartMs}ms: $throwable"
+            )
             if (hasBeenRecreated) {
                 // the poTokenGenerator has just been recreated (and possibly this is already the
                 // second time we try), so there is likely nothing we can do
@@ -103,6 +115,12 @@ class PoTokenGenerator : PoTokenProvider {
                 TAG, "poToken for $videoId: $poToken, visitor_data=$visitorData"
             )
         }
+        com.github.libretube.helpers.DebugDiagnostics.sabr(
+            "poToken generator ${System.identityHashCode(this)} generated token " +
+                "${com.github.libretube.helpers.DebugDiagnostics.fingerprint(poToken)} for visitorData " +
+                "${com.github.libretube.helpers.DebugDiagnostics.fingerprint(visitorData)} videoId=$videoId " +
+                "in ${System.currentTimeMillis() - generationStartMs}ms recreated=$hasBeenRecreated"
+        )
 
         return PoTokenResult(visitorData, poToken, poToken)
     }
