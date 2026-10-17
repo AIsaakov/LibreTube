@@ -50,6 +50,13 @@ class HomeViewModel : ViewModel() {
 
     private val sections get() = listOf(trending, feed, bookmarks, playlists, continueWatching)
 
+    /**
+     * The home tab sections requested by the last call to [loadHomeFeed], used to tell whether
+     * the user has changed the home tab content since then.
+     */
+    var loadedItems: Set<String>? = null
+        private set
+
     private var loadHomeJob: Job? = null
 
     fun loadHomeFeed(
@@ -59,6 +66,15 @@ class HomeViewModel : ViewModel() {
         onUnusualLoadTime: () -> Unit
     ) {
         isLoading.value = true
+        loadedItems = visibleItems.toSet()
+
+        // the view model outlives the home fragment, so sections the user has turned off would
+        // otherwise keep showing their previously loaded content
+        if (TRENDING !in visibleItems) trending.value = null
+        if (FEATURED !in visibleItems) feed.value = null
+        if (BOOKMARKS !in visibleItems) bookmarks.value = null
+        if (PLAYLISTS !in visibleItems) playlists.value = null
+        if (WATCHING !in visibleItems) continueWatching.value = null
 
         loadHomeJob?.cancel()
         loadHomeJob = viewModelScope.launch {
