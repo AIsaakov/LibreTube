@@ -11,12 +11,14 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Rect
+import android.hardware.display.DisplayManager
 import android.media.session.PlaybackState
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.view.KeyEvent
+import android.view.OrientationEventListener
 import android.view.PixelCopy
 import android.view.SurfaceView
 import android.view.View
@@ -75,6 +77,7 @@ import com.github.libretube.extensions.toID
 import com.github.libretube.extensions.togglePlayPauseState
 import com.github.libretube.extensions.updateIfChanged
 import com.github.libretube.helpers.BackgroundHelper
+import com.github.libretube.helpers.DisplayHelper
 import com.github.libretube.helpers.DownloadHelper
 import com.github.libretube.helpers.ImageHelper
 import com.github.libretube.helpers.NavigationHelper
@@ -165,6 +168,37 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
 
     // check if pip is entered via the dedicated button
     private var isEnteringPiPMode = false
+
+    /**
+     * The orientation fullscreen is locked to while the screen is off and after it turns back on,
+     * or null when it isn't locked. While the screen is off, the display turns to portrait, and a
+     * phone lying flat gives the sensor no direction to turn it back, so fullscreen would come
+     * back in portrait.
+     */
+    private var screenOffFullscreenOrientation: Int? = null
+
+    // the requested orientation to restore once the lock is released
+    private var orientationBeforeScreenOff = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+
+    // the display's orientation as of its last change while the screen was on, since by the time
+    // the fragment learns that the screen is off, the display has already turned to portrait
+    private var lastScreenOnOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+
+    // turning from landscape to reverse landscape changes the display but not the configuration
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) = Unit
+        override fun onDisplayRemoved(displayId: Int) = Unit
+        override fun onDisplayChanged(displayId: Int) = onDisplayOrientationChanged()
+    }
+
+    // releases the lock as soon as the device is no longer lying flat
+    private val screenOnOrientationListener by lazy {
+        object : OrientationEventListener(requireContext()) {
+            override fun onOrientationChanged(orientation: Int) {
+                if (orientation != ORIENTATION_UNKNOWN) releaseScreenOffOrientationLock()
+            }
+        }
+    }
 
     private val baseActivity get() = activity as AbstractPlayerHostActivity
     private val windowInsetsControllerCompat
@@ -400,6 +434,9 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
             IntentFilter(PlayerHelper.getIntentActionName(requireContext())),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+
+        requireContext().getSystemService<DisplayManager>()!!
+            .registerDisplayListener(displayListener, handler)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -432,6 +469,7 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
         changeOrientationMode()
 
         playerLayoutOrientation = resources.configuration.orientation
+        onDisplayOrientationChanged()
 
         initializeTransitionLayout()
         initializeOnClickActions()
@@ -854,6 +892,8 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
     fun unsetFullscreen() {
         if (activity == null || _binding == null) return
 
+        releaseScreenOffOrientationLock()
+
         commonPlayerViewModel.isFullscreen.value = false
 
         if (!PlayerHelper.autoFullscreenEnabled) {
@@ -925,6 +965,9 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
             playerController.pause()
         }
 
+        if (!isInteractive && !isEnteringPiPMode) lockFullscreenOrientationForScreenOff()
+        screenOnOrientationListener.disable()
+
         isEnteringPiPMode = false
 
         super.onPause()
@@ -932,6 +975,8 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
 
     override fun onResume() {
         super.onResume()
+
+        restoreFullscreenAfterScreenOff()
 
         if (closedVideo) {
             closedVideo = false
@@ -945,6 +990,58 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
 
         // re-enable and load video stream
         setVideoTrackTypeDisabled(false)
+    }
+
+    /**
+     * Keep fullscreen in the orientation it had while the screen was on, see
+     * [screenOffFullscreenOrientation].
+     */
+    private fun lockFullscreenOrientationForScreenOff() {
+        // already locked, e.g. by the other display event or by an earlier screen off
+        if (screenOffFullscreenOrientation != null ||
+            lastScreenOnOrientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED ||
+            commonPlayerViewModel.isFullscreen.value != true ||
+            PictureInPictureCompat.isInPictureInPictureMode(requireActivity())
+        ) return
+
+        orientationBeforeScreenOff = baseActivity.requestedOrientation
+        screenOffFullscreenOrientation = lastScreenOnOrientation
+        baseActivity.requestedOrientation = lastScreenOnOrientation
+    }
+
+    /**
+     * Record the display's orientation while the screen is on, and lock fullscreen to it once the
+     * display changes with the screen off. Called on both display and configuration changes,
+     * since either may come first and the configuration may still be the old one during a
+     * display change.
+     */
+    private fun onDisplayOrientationChanged() {
+        val activity = activity ?: return
+        val isInteractive = activity.getSystemService<PowerManager>()!!.isInteractive
+
+        if (isInteractive) {
+            lastScreenOnOrientation = DisplayHelper.getLockedOrientation(activity)
+        } else {
+            lockFullscreenOrientationForScreenOff()
+        }
+    }
+
+    private fun restoreFullscreenAfterScreenOff() {
+        val lockedOrientation = screenOffFullscreenOrientation ?: return
+
+        if (commonPlayerViewModel.isFullscreen.value != true) setFullscreen()
+        // entering fullscreen requests the fullscreen orientation setting, so lock it afterwards
+        baseActivity.requestedOrientation = lockedOrientation
+
+        screenOnOrientationListener.enable()
+    }
+
+    private fun releaseScreenOffOrientationLock() {
+        screenOnOrientationListener.disable()
+        if (screenOffFullscreenOrientation == null) return
+
+        screenOffFullscreenOrientation = null
+        baseActivity.requestedOrientation = orientationBeforeScreenOff
     }
 
     private fun setAutoPlayCountdownEnabled(enabled: Boolean) {
@@ -973,6 +1070,8 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
         super.onDestroy()
 
         handler.removeCallbacksAndMessages(null)
+        screenOnOrientationListener.disable()
+        context?.getSystemService<DisplayManager>()?.unregisterDisplayListener(displayListener)
 
         if (::playerController.isInitialized && playerController.isConnected) {
             playerController.removeListener(playerListener)
@@ -1471,7 +1570,10 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
             return
         }
 
-        if (PlayerHelper.autoFullscreenEnabled) {
+        onDisplayOrientationChanged()
+
+        // ignore the display turning to portrait while fullscreen is locked after a screen off
+        if (PlayerHelper.autoFullscreenEnabled && screenOffFullscreenOrientation == null) {
             when (newConfig.orientation) {
                 // go to fullscreen mode
                 Configuration.ORIENTATION_LANDSCAPE -> setFullscreen()
