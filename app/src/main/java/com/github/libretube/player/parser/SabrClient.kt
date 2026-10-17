@@ -43,6 +43,10 @@ import video_streaming.StreamerContextOuterClass.StreamerContext
 import video_streaming.StreamerContextOuterClass.StreamerContext.SabrContext
 import video_streaming.UmpPartId.UMPPartId
 import video_streaming.VideoPlaybackAbrRequestOuterClass.VideoPlaybackAbrRequest
+import java.io.IOException
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.UnknownHostException
 import java.time.Instant
 import kotlin.math.max
 
@@ -97,6 +101,15 @@ data class Segment(
  */
 internal fun secondsUntilUrlExpiry(url: String, nowSeconds: Long): Long? =
     url.toHttpUrlOrNull()?.queryParameter("expire")?.toLongOrNull()?.let { it - nowSeconds }
+
+/**
+ * Whether [e], or any of its causes, means that the server couldn't be reached from the
+ * current network, e.g. because its hostname has no address of a type the network supports.
+ */
+internal fun isServerUnreachable(e: Throwable): Boolean =
+    generateSequence(e) { it.cause }.any {
+        it is UnknownHostException || it is NoRouteToHostException || it is ConnectException
+    }
 
 /** Thrown when the server refuses the stream until it receives a valid poToken. */
 class AttestationRequiredException : Exception("Attestation required")
@@ -376,13 +389,33 @@ class SabrClient private constructor(
     }
 
     private suspend fun fetchAndProcessMediaWithReload(playbackRequest: PlaybackRequest) {
-        fetchAndProcessMedia(playbackRequest)
+        fetchAndProcessMediaFromReachableServer(playbackRequest)
         if (reloadRequested) {
             // the server also requests a reload for other reasons, e.g. a configuration change,
             // which new stream information resolves as well
             refreshStreamingUrl("server requested player reload")
-            fetchAndProcessMedia(playbackRequest)
+            fetchAndProcessMediaFromReachableServer(playbackRequest)
             if (reloadRequested) throw Exception("Server requested player reload")
+        }
+    }
+
+    private suspend fun fetchAndProcessMediaFromReachableServer(playbackRequest: PlaybackRequest) {
+        try {
+            fetchAndProcessMedia(playbackRequest)
+        } catch (e: IOException) {
+            if (!isServerUnreachable(e)) throw e
+            // the URL points at a server chosen for the network it was fetched on, which another
+            // network may not reach, e.g. a carrier's cache server with only an IPv6 address after
+            // switching to a Wi-Fi network without IPv6, while new stream information names a
+            // server chosen for the current network
+            try {
+                refreshStreamingUrl("server unreachable: ${e.message}")
+            } catch (refreshError: Exception) {
+                // e.g. without any network, fail with the original error
+                e.addSuppressed(refreshError)
+                throw e
+            }
+            fetchAndProcessMedia(playbackRequest)
         }
     }
 
