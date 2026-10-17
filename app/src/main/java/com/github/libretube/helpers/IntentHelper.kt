@@ -12,10 +12,13 @@ import androidx.fragment.app.FragmentManager
 import com.github.libretube.R
 import com.github.libretube.constants.IntentData
 import com.github.libretube.extensions.toastFromMainThread
+import com.github.libretube.ui.dialogs.ShareDialog.Companion.YOUTUBE_FRONTEND_URL
 import com.github.libretube.ui.sheets.IntentChooserSheet
 import com.github.libretube.util.TextUtils.toTimeInSeconds
 
 object IntentHelper {
+    private const val YOUTUBE_APP_PACKAGE = "com.google.android.youtube"
+
     private fun getResolveIntent(link: String) = Intent(Intent.ACTION_VIEW)
         .setData(link.toUri())
         .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -49,6 +52,22 @@ object IntentHelper {
                 .apply { arguments = bundleOf(IntentData.url to link) }
                 .show(fragmentManager)
         }
+    }
+
+    fun getYouTubeWatchUrl(videoId: String, positionSeconds: Long?): String {
+        val url = "$YOUTUBE_FRONTEND_URL/watch?v=$videoId"
+        return if (positionSeconds != null) "$url&t=$positionSeconds" else url
+    }
+
+    /**
+     * Returns an intent that opens the video in the YouTube app, or null if the YouTube app
+     * isn't installed or is disabled.
+     */
+    fun getYouTubeAppIntent(context: Context, videoId: String, positionSeconds: Long?): Intent? {
+        // Targeting the package stops Android from offering LibreTube itself for the link.
+        val intent = getResolveIntent(getYouTubeWatchUrl(videoId, positionSeconds))
+            .setPackage(YOUTUBE_APP_PACKAGE)
+        return intent.takeIf { it.resolveActivity(context.packageManager) != null }
     }
 
     fun resolveType(uri: Uri) = resolveType(Intent(), uri)
