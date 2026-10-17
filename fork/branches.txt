@@ -3,7 +3,7 @@
 fix/activity-recreation
 fix/sabr-video-download
 fix/forced-theme-webview
-fix/sabr-url-expiry
+fix/sabr-url-refresh
 debug/diagnostics
 feat/separate-seek-increments
 feat/pinch-zoom

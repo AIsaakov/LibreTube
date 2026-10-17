@@ -4,5 +4,5 @@ Written for whoever runs `fork/rebuild-fork-main.sh` and has it stop on a confli
 
 `rerere` stores resolutions per computer, so a new clone meets each of these once. Keep the entries in step with `fork/branches.txt`: when a branch is renamed or dropped from the list, update or remove its entries in the same commit.
 
-- **`SabrClient.kt`**, merging `fix/sabr-url-expiry` after `fix/sabr-video-download`. Both add a top-level function before `InitializedFormat` and a constant at the start of the `companion object`. Keep both functions and both constants.
+- **`SabrClient.kt`**, merging `fix/sabr-url-refresh` after `fix/sabr-video-download`. Both add a top-level function before `InitializedFormat` and a constant at the start of the `companion object`. Keep both functions and both constants.
 - **`SabrDataSource.kt`**, merging `debug/diagnostics` after `fix/sabr-video-download`. Keep the `DebugDiagnostics.sabr(...)` call from `debug/diagnostics`, followed by the comment and `throw IOException(e)` from `fix/sabr-video-download`.
