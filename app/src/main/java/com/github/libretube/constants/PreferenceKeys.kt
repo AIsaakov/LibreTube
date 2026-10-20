@@ -52,7 +52,9 @@ object PreferenceKeys {
     const val SYSTEM_CAPTION_STYLE = "system_caption_style"
     const val CAPTION_SETTINGS = "caption_settings"
     const val RICH_CAPTION_RENDERING = "rich_caption_rendering"
-    const val SEEK_INCREMENT = "seek_increment"
+    // Keeps the key of the single increment used for both directions, so existing values carry over
+    const val SEEK_FORWARD_INCREMENT = "seek_increment"
+    const val SEEK_BACK_INCREMENT = "seek_back_increment"
     const val DEFAULT_RESOLUTION = "default_res"
     const val DEFAULT_RESOLUTION_MOBILE = "default_res_mobile"
     const val BUFFERING_GOAL = "buffering_goal"

@@ -178,6 +178,8 @@
     <string name="behavior">Behavior</string>
     <string name="player_summary">Defaults and behavior</string>
     <string name="seek_increment">Seek increment</string>
+    <string name="seek_forward_increment">Seek forward increment</string>
+    <string name="seek_back_increment">Seek back increment</string>
     <string name="pauseOnScreenOff">Auto-pause</string>
     <string name="pauseOnScreenOff_summary">Pause playback when the screen is turned off</string>
     <string name="clonePlaylist">Clone playlist</string>
