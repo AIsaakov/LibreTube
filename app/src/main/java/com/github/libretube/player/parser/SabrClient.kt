@@ -115,6 +115,30 @@ internal fun isServerUnreachable(e: Throwable): Boolean =
 class AttestationRequiredException : Exception("Attestation required")
 
 /**
+ * Decides when a request that the server refused is retried in a new session: once per failure,
+ * so that a server that keeps refusing ends in an error instead of a loop.
+ */
+internal class SessionRecovery {
+    /** Whether a new session was started without a successful request since. */
+    private var attempted = false
+
+    suspend fun fetch(fetch: suspend () -> Unit, startNewSession: (reason: String) -> Unit) {
+        try {
+            fetch()
+        } catch (e: AttestationRequiredException) {
+            if (attempted) throw e
+            attempted = true
+            // the server sometimes refuses every poToken of a session, while a new session of the
+            // same video, as when reopening it, passes without one
+            startNewSession("attestation required")
+            fetch()
+        }
+        // allow another recovery once a request after the last one succeeded
+        attempted = false
+    }
+}
+
+/**
  * An initialized format within a video stream.
  */
 private data class InitializedFormat(
@@ -192,8 +216,7 @@ class SabrClient private constructor(
     private var fatalError: SabrError? = null
     /** Whether the last response contained a [UMPPartId.RELOAD_PLAYER_RESPONSE] part. */
     private var reloadRequested = false
-    /** Whether a new session was started after an attestation refusal, without a successful request since. */
-    private var attestationRecoveryAttempted = false
+    private val sessionRecovery = SessionRecovery()
     private val dispatcher = Dispatchers.IO.limitedParallelism(1)
 
     /** Audio format video format */
@@ -374,18 +397,10 @@ class SabrClient private constructor(
             refreshStreamingUrl("url expires in ${expiresInSeconds}s")
         }
 
-        try {
-            fetchAndProcessMediaWithReload(playbackRequest)
-        } catch (e: AttestationRequiredException) {
-            if (attestationRecoveryAttempted) throw e
-            attestationRecoveryAttempted = true
-            // the server sometimes refuses every poToken of a session, while a new session of the
-            // same video, as when reopening it, passes without one
-            startNewSession("attestation required")
-            fetchAndProcessMediaWithReload(playbackRequest)
-        }
-        // allow another recovery once a request after the last one succeeded
-        attestationRecoveryAttempted = false
+        sessionRecovery.fetch(
+            fetch = { fetchAndProcessMediaWithReload(playbackRequest) },
+            startNewSession = ::startNewSession
+        )
     }
 
     private suspend fun fetchAndProcessMediaWithReload(playbackRequest: PlaybackRequest) {
