@@ -323,6 +323,12 @@ object PlayerHelper {
             false
         )
 
+    val trackKeysSeek: Boolean
+        get() = PreferenceHelper.getBoolean(
+            PreferenceKeys.TRACK_KEYS_SEEK,
+            false
+        )
+
     private val alternativePiPControls: Boolean
         get() = PreferenceHelper.getBoolean(
             PreferenceKeys.ALTERNATIVE_PIP_CONTROLS,

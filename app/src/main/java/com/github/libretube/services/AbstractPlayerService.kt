@@ -325,6 +325,37 @@ abstract class AbstractPlayerService : MediaLibraryService(), MediaLibrarySessio
     }
 
     /**
+     * Seek forward or back for the next and previous track media keys, such as those of earbuds,
+     * if enabled in the settings. The media notification's buttons keep changing videos, as
+     * their icons show.
+     *
+     * @return whether the media key was handled
+     */
+    private fun seekWithTrackKey(
+        session: MediaSession,
+        controllerInfo: MediaSession.ControllerInfo,
+        intent: Intent
+    ): Boolean {
+        if (!PlayerHelper.trackKeysSeek || session.isMediaNotificationController(controllerInfo)) {
+            return false
+        }
+
+        val event: KeyEvent = intent.parcelableExtra(Intent.EXTRA_KEY_EVENT) ?: return false
+        val playerEvent = when (event.keyCode) {
+            KeyEvent.KEYCODE_MEDIA_NEXT -> PlayerEvent.Forward
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> PlayerEvent.Rewind
+            else -> return false
+        }
+
+        // A key press arrives as a key-down and a key-up event, plus repeated key-down events
+        // while the key is held. Seek once per press.
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            handlePlayerAction(playerEvent)
+        }
+        return true
+    }
+
+    /**
      * Trigger a notification update with an updated PendingIntent.
      */
     private fun updateNotification() {
@@ -446,6 +477,7 @@ abstract class AbstractPlayerService : MediaLibraryService(), MediaLibrarySessio
         controllerInfo: MediaSession.ControllerInfo,
         intent: Intent
     ): Boolean {
+        if (seekWithTrackKey(session, controllerInfo, intent)) return true
         val event: KeyEvent = intent.parcelableExtra(Intent.EXTRA_KEY_EVENT) ?: return false
         val playerEvent = when (event.keyCode) {
             KeyEvent.KEYCODE_MEDIA_NEXT -> PlayerEvent.Next
