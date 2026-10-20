@@ -473,6 +473,7 @@ object PlayerHelper {
             .build()
             .apply {
                 loadPlaybackParams()
+                addAnalyticsListener(androidx.media3.exoplayer.util.EventLogger())
             }
     }
 
