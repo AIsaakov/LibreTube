@@ -111,8 +111,14 @@ internal fun isServerUnreachable(e: Throwable): Boolean =
         it is UnknownHostException || it is NoRouteToHostException || it is ConnectException
     }
 
+/** Thrown when the server refuses to continue the stream in the current session. */
+sealed class SessionRefusedException(message: String) : Exception(message)
+
 /** Thrown when the server refuses the stream until it receives a valid poToken. */
-class AttestationRequiredException : Exception("Attestation required")
+class AttestationRequiredException : SessionRefusedException("Attestation required")
+
+/** Thrown when the server keeps requesting a player reload after the stream URL was refreshed. */
+class PlayerReloadRequestedException : SessionRefusedException("Server requested player reload")
 
 /**
  * Decides when a request that the server refused is retried in a new session: once per failure,
@@ -125,12 +131,13 @@ internal class SessionRecovery {
     suspend fun fetch(fetch: suspend () -> Unit, startNewSession: (reason: String) -> Unit) {
         try {
             fetch()
-        } catch (e: AttestationRequiredException) {
+        } catch (e: SessionRefusedException) {
             if (attempted) throw e
             attempted = true
-            // the server sometimes refuses every poToken of a session, while a new session of the
-            // same video, as when reopening it, passes without one
-            startNewSession("attestation required")
+            // the server sometimes refuses every poToken of a session, or, once a session is about
+            // six hours old, answers every request with a reload request even with a new URL,
+            // while a new session of the same video, as when reopening it, plays normally
+            startNewSession(e.message!!)
             fetch()
         }
         // allow another recovery once a request after the last one succeeded
@@ -410,7 +417,7 @@ class SabrClient private constructor(
             // which new stream information resolves as well
             refreshStreamingUrl("server requested player reload")
             fetchAndProcessMediaFromReachableServer(playbackRequest)
-            if (reloadRequested) throw Exception("Server requested player reload")
+            if (reloadRequested) throw PlayerReloadRequestedException()
         }
     }
 
