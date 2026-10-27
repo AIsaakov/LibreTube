@@ -22,9 +22,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper
-import video_streaming.BufferedRangeOuterClass.BufferedRange
 import video_streaming.ClientAbrStateOuterClass.ClientAbrState
-import video_streaming.FormatInitializationMetadataOuterClass.FormatInitializationMetadata
 import video_streaming.MediaCapabilitiesOuterClass.MediaCapabilities
 import video_streaming.MediaCapabilitiesOuterClass.MediaCapabilities.VideoFormatCapability
 import video_streaming.MediaHeaderOuterClass.MediaHeader
@@ -89,61 +87,6 @@ data class Segment(
 }
 
 /**
- * An initialized format within a video stream.
- */
-private data class InitializedFormat(
-    /** Identifier of the format. */
-    val id: FormatId,
-    /** Segments that have been downloaded for this format. */
-    val downloadedSegments: MutableMap<Long, Segment> = mutableMapOf(),
-    /** Segments that have been downloaded for this format. */
-    val bufferedSegments: MutableMap<Long, Segment> = mutableMapOf(),
-    /** Sequence number of the last segment in the format. */
-    val endSegmentNumber: Long,
-    /** Initial segment containing metadata about the stream,
-     *  such as the position of the other segments.
-     **/
-    var initSegment: Segment? = null,
-    /** Duration of the format in milliseconds. */
-    val duration: Long,
-) {
-    /** Returns a list of all downloaded segments for the format. */
-    fun getSegment(sequenceNumber: Long): Segment? {
-        val segment = downloadedSegments.remove(sequenceNumber)
-            ?: initSegment?.takeIf { it.sequenceNumber == sequenceNumber }
-            ?: return null
-        // mark retrieved segment as buffered
-        bufferedSegments[sequenceNumber] = segment.copy(data = mutableListOf())
-        return segment
-    }
-
-    /** Returns a list of all downloaded segments for the format. */
-    fun buildBufferedRanges(): List<BufferedRange> =
-        bufferedSegments.entries.union(downloadedSegments.entries).sortedBy { it.key }
-        .fold(mutableListOf<MutableList<Pair<Long, Segment>>>()) { acc, (id, segment) ->
-            val previousId = acc.lastOrNull()?.lastOrNull()?.first
-            if (previousId?.plus(1) != id) {
-                //we found a discontinuity, create a new partition
-                acc.add(mutableListOf())
-            }
-            acc.lastOrNull()!!.add(Pair(id, segment))
-            acc
-        }.map { partition ->
-            val duration = partition.sumOf { it.second.duration }
-            val (firstId, firstSegment) = partition.first()
-            BufferedRange.newBuilder().setFormatId(id).setStartTimeMs(firstSegment.header.startMs)
-                .setDurationMs(duration).setStartSegmentIndex(firstId.toInt())
-                .setEndSegmentIndex(partition.last().first.toInt()).build()
-        }
-
-    /**
-     * Whether the format has non-retrieved data.
-     */
-    fun hasSegment(segmentNumber: Long): Boolean =
-        downloadedSegments.containsKey(segmentNumber) || initSegment?.sequenceNumber == segmentNumber
-}
-
-/**
  * A SABR/UMP streaming client.
  *
  * Handles the fetching and processing of streaming media data using the UMP protocol.
@@ -183,22 +126,8 @@ class SabrClient private constructor(
         }
     }
 
-    /**
-     * Initialized formats.
-     *
-     * A format is initialized when the stream sends a [UMPPartId.FORMAT_INITIALIZATION_METADATA] part,
-     * containing the metadata of the format.
-     *
-     * Each format is identified by its `itag`.
-     */
-    private val initializedFormats = mutableMapOf<Int, InitializedFormat>()
-
-    /**
-     * Partial segments that are being processed.
-     *
-     * Segments are stored here temporarily until they are fully processed.
-     */
-    private val partialSegments = mutableMapOf<Int, Segment>()
+    /** Formats and media segments received from the stream. */
+    private val segmentStore = SabrSegmentStore(videoId)
 
     /** HTTP Client for requesting UMP data. */
     private val client: OkHttpClient = OkHttpClient.Builder()
@@ -282,7 +211,7 @@ class SabrClient private constructor(
      * Calling [getNextSegment] with [PlaybackRequest.segment] set to a value larger than the last
      * segment number will crash the client.
      */
-    fun getEndSegmentNumber(formatId: FormatId): Long? = initializedFormats[formatId.itag]?.endSegmentNumber
+    fun getEndSegmentNumber(formatId: FormatId): Long? = segmentStore.initializedFormats[formatId.itag]?.endSegmentNumber
 
     /**
      * Returns the segment specified in [playbackRequest].
@@ -296,7 +225,7 @@ class SabrClient private constructor(
 
         // the player should never request data past the end of the stream
         assert(
-            playbackRequest.playerPosition < (initializedFormats[itag]?.duration ?: Long.MAX_VALUE)
+            playbackRequest.playerPosition < (segmentStore.initializedFormats[itag]?.duration ?: Long.MAX_VALUE)
         ) { "Requested segment for finished format" }
 
         Log.d(
@@ -305,12 +234,12 @@ class SabrClient private constructor(
         )
 
         // synchronize buffered segments with the actually buffered segments from the player
-        initializedFormats[itag]?.bufferedSegments?.keys?.retainAll(playbackRequest.bufferedSegments)
+        segmentStore.initializedFormats[itag]?.bufferedSegments?.keys?.retainAll(playbackRequest.bufferedSegments)
 
         return runBlocking {
             // ensure that the data is only ever accessed by a single thread
             withContext(dispatcher) {
-                var format = initializedFormats[itag]
+                var format = segmentStore.initializedFormats[itag]
                 if (format == null || !format.hasSegment(playbackRequest.segment)) {
                     // remove segments that where downloaded, but never requested by the player
                     // (e.g. due to seeking), to avoid keeping them around forever and thus leaking memory
@@ -322,9 +251,9 @@ class SabrClient private constructor(
                     // clear previous formats to prevent advertising stale data to the server/buffering them
                     // we only dio this after requesting new data, to avoid accidentally clearing to the currently selected format,
                     // e.g. killing the current buffer
-                    initializedFormats.keys.retainAll { audioFormat?.stream?.itag == it || videoFormat?.stream?.itag == it }
+                    segmentStore.initializedFormats.keys.retainAll { audioFormat?.stream?.itag == it || videoFormat?.stream?.itag == it }
                 }
-                format = format ?: initializedFormats[itag]
+                format = format ?: segmentStore.initializedFormats[itag]
                 return@withContext format?.getSegment(playbackRequest.segment)
             }
         }
@@ -406,8 +335,8 @@ class SabrClient private constructor(
             .setVideoPlaybackUstreamerConfig(ustreamerConfig)
             .addAllPreferredAudioFormatIds(listOfNotNull(audioFormat?.formatId()))
             .addAllPreferredVideoFormatIds(listOfNotNull(videoFormat?.formatId()))
-            .addAllSelectedFormatIds(initializedFormats.values.map { it.id }.toList())
-            .addAllBufferedRanges(initializedFormats.values.flatMap { it.buildBufferedRanges() })
+            .addAllSelectedFormatIds(segmentStore.initializedFormats.values.map { it.id }.toList())
+            .addAllBufferedRanges(segmentStore.initializedFormats.values.flatMap { it.buildBufferedRanges() })
             .setStreamerContext(
                 StreamerContext.newBuilder()
                     .setPoToken(poToken ?: ByteString.empty())
@@ -455,69 +384,11 @@ class SabrClient private constructor(
      */
     private fun processPart(part: UmpParser.Part) {
         when (part.type) {
-            UMPPartId.MEDIA_HEADER -> {
-                val header = MediaHeader.parseFrom(part.data)
-                val videoId = header.videoId
-                val headerId = header.headerId
-                val sequenceNumber = header.sequenceNumber
-                val duration = if (header.hasDurationMs()) header.durationMs else {
-                    ((header.timeRange.durationTicks.toDouble() / header.timeRange.timescale.toDouble()) * 1000).toLong()
-                }
+            UMPPartId.MEDIA_HEADER -> segmentStore.processMediaHeader(part.data)
 
-                if (videoId != this.videoId) {
-                    Log.e(TAG, "processPart: Received unexpected media header for $videoId")
-                    throw Exception("Header mismatch")
-                }
+            UMPPartId.MEDIA -> segmentStore.processMedia(part.data)
 
-                val format = initializedFormats[header.formatId.itag]!!
-
-                if (format.downloadedSegments.containsKey(sequenceNumber)) {
-                    Log.w(TAG, "processPart: Segment $sequenceNumber is already downloaded. Ignoring.")
-                    return
-                }
-
-                Log.v(TAG, "processPart: Enqueuing partial segment $headerId")
-                partialSegments[headerId] = Segment(
-                    header = header,
-                    sequenceNumber = sequenceNumber,
-                    data = mutableListOf(),
-                    duration = duration
-                )
-            }
-
-            UMPPartId.MEDIA -> {
-                val parser = UmpParser(part.data)
-                val headerId = parser.readVarint()?.toInt()!!
-
-                // repeated segment are skipped, when their header is found and their not added
-                // to the partial segment queue
-                val segment = partialSegments[headerId] ?: return
-                //TODO: decompress gzipped data (not send for the WEB client)
-                segment.data.add(parser.data())
-            }
-
-            UMPPartId.MEDIA_END -> {
-                val parser = UmpParser(part.data)
-                val headerId = parser.readVarint()?.toInt()!!
-                val segment = partialSegments.remove(headerId) ?: return
-                Log.v(TAG, "processPart: Dequeuing partial segment $headerId")
-
-                val segmentLength = segment.length()
-                if (segmentLength != segment.header.contentLength.toInt()) {
-                    Log.w(
-                        TAG,
-                        "processPart: Content length mismatch for segment $headerId: expected ${segment.header.contentLength}, got $segmentLength"
-                    )
-                    throw Exception("Content length mismatch")
-                }
-
-                val format = initializedFormats[segment.header.itag]!!
-                format.downloadedSegments[segment.sequenceNumber] = segment
-
-                if (segment.header.isInitSeg) {
-                    format.initSegment = segment
-                }
-            }
+            UMPPartId.MEDIA_END -> segmentStore.processMediaEnd(part.data)
 
             UMPPartId.NEXT_REQUEST_POLICY -> {
                 val policy = NextRequestPolicy.parseFrom(part.data)
@@ -525,26 +396,8 @@ class SabrClient private constructor(
                 playbackCookie = policy.playbackCookie
             }
 
-            UMPPartId.FORMAT_INITIALIZATION_METADATA -> {
-                val metadata = FormatInitializationMetadata.parseFrom(part.data)
-
-                val duration = metadata.endTimeMs
-                val endSegmentNumber = metadata.endSegmentNumber
-                val formatId = metadata.formatId
-                val itag = formatId.itag
-
-                if (initializedFormats.containsKey(itag)) {
-                    Log.w(TAG, "processPart: Skipping already initialized format `$itag`")
-                    return
-                }
-
-                val format = InitializedFormat(
-                    id = formatId,
-                    endSegmentNumber = endSegmentNumber,
-                    duration = duration
-                )
-                initializedFormats[itag] = format
-            }
+            UMPPartId.FORMAT_INITIALIZATION_METADATA ->
+                segmentStore.processFormatInitializationMetadata(part.data)
 
             UMPPartId.SABR_REDIRECT -> {
                 val redirect = SabrRedirect.parseFrom(part.data)
