@@ -144,6 +144,12 @@ internal class SabrSegmentStore(
                 TAG,
                 "processPart: Content length mismatch for segment $headerId: expected ${segment.header.contentLength}, got $segmentLength"
             )
+            // A format without an init segment can't be played, and while it stays initialized,
+            // requests tell the server it's already selected and keep its metadata from the failed
+            // response. Forget it, so that the next request starts the format from scratch.
+            if (initializedFormats[segment.header.itag]?.initSegment == null) {
+                initializedFormats.remove(segment.header.itag)
+            }
             throw Exception("Content length mismatch")
         }
 
