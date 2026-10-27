@@ -97,6 +97,9 @@ android {
 
     tasks.register("testClasses")
 
+    // lets unit tests run code that logs with android.util.Log
+    testOptions.unitTests.isReturnDefaultValues = true
+
     lint {
         abortOnError = false
         checkReleaseBuilds = false
