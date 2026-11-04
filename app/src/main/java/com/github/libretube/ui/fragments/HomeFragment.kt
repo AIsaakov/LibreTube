@@ -162,12 +162,15 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
         super.onResume()
 
         // Avoid re-fetching when re-entering the screen if it was loaded successfully, except when
-        // the value of trending region has changed
+        // the value of trending region or the home tab content has changed
         val isTrendingRegionChanged = homeViewModel.trending.value?.let {
             it.second.region != PreferenceHelper.getTrendingRegion(requireContext())
         } == true
+        val isHomeTabContentChanged = homeViewModel.loadedItems != getVisibleItems()
 
-        if (homeViewModel.loadedSuccessfully.value == false || isTrendingRegionChanged) {
+        if (homeViewModel.loadedSuccessfully.value == false || isTrendingRegionChanged ||
+            isHomeTabContentChanged
+        ) {
             fetchHomeFeed()
         }
     }
@@ -179,19 +182,25 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
 
     private fun fetchHomeFeed() {
         binding.nothingHere.isGone = true
-        val defaultItems = resources.getStringArray(R.array.homeTabItemsValues)
-        val visibleItems = PreferenceHelper.getStringSet(HOME_TAB_CONTENT, defaultItems.toSet())
 
         homeViewModel.loadHomeFeed(
             context = requireContext(),
             subscriptionsViewModel = subscriptionsViewModel,
-            visibleItems = visibleItems,
+            visibleItems = getVisibleItems(),
             onUnusualLoadTime = ::showChangeInstanceSnackBar
         )
     }
 
+    private fun getVisibleItems(): Set<String> {
+        val defaultItems = resources.getStringArray(R.array.homeTabItemsValues)
+        return PreferenceHelper.getStringSet(HOME_TAB_CONTENT, defaultItems.toSet())
+    }
+
     private fun showTrending(trends: Pair<TrendingCategory, TrendsViewModel.TrendingStreams>?) {
-        if (trends == null) return
+        if (trends == null) {
+            makeGone(binding.trendingRV, binding.trendingTV)
+            return
+        }
         val (category, trendingStreams) = trends
 
         // cache the loaded trends in the [TrendsViewModel] so that the trends don't need to be
@@ -207,7 +216,10 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     }
 
     private fun showFeed(streamItems: List<StreamItem>?) {
-        if (streamItems == null) return
+        if (streamItems == null) {
+            makeGone(binding.featuredRV, binding.featuredTV)
+            return
+        }
 
         makeVisible(binding.featuredRV, binding.featuredTV)
         val feedVideos = streamItems.take(20)
@@ -216,7 +228,10 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     }
 
     private fun showBookmarks(bookmarks: List<PlaylistBookmark>?) {
-        if (bookmarks == null) return
+        if (bookmarks == null) {
+            makeGone(binding.bookmarksTV, binding.bookmarksRV)
+            return
+        }
 
         makeVisible(binding.bookmarksTV, binding.bookmarksRV)
         bookmarkAdapter.submitList(bookmarks.map { bookmark ->
@@ -229,7 +244,10 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     }
 
     private fun showPlaylists(playlists: List<Playlists>?) {
-        if (playlists == null) return
+        if (playlists == null) {
+            makeGone(binding.playlistsRV, binding.playlistsTV)
+            return
+        }
 
         makeVisible(binding.playlistsRV, binding.playlistsTV)
         playlistAdapter.submitList(playlists.map { playlist ->
@@ -242,7 +260,10 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
     }
 
     private fun showContinueWatching(unwatchedVideos: List<StreamItem>?) {
-        if (unwatchedVideos == null) return
+        if (unwatchedVideos == null) {
+            makeGone(binding.watchingRV, binding.watchingTV)
+            return
+        }
 
         makeVisible(binding.watchingRV, binding.watchingTV)
         watchingAdapter.submitList(unwatchedVideos)
@@ -306,5 +327,9 @@ class HomeFragment : Fragment(R.layout.fragment_home) {
 
     private fun makeVisible(vararg views: View) {
         views.forEach { it.isVisible = true }
+    }
+
+    private fun makeGone(vararg views: View) {
+        views.forEach { it.isGone = true }
     }
 }
