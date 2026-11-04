@@ -211,6 +211,23 @@ object PreferenceHelper {
             putInt(PreferenceKeys.PREFERENCE_VERSION, currentPrefVersion)
         }
 
+        copySeekIncrementToSeekBackIncrement()
+    }
+
+    /**
+     * Give the back increment the value of the former single seek increment, so its slider shows
+     * the value in use. Not a numbered [PreferenceMigration]: a fork-only version number would
+     * clash with the next migration added upstream.
+     */
+    private fun copySeekIncrementToSeekBackIncrement() {
+        if (!settings.contains(PreferenceKeys.SEEK_BACK_INCREMENT) &&
+            settings.contains(PreferenceKeys.SEEK_FORWARD_INCREMENT)
+        ) {
+            putString(
+                PreferenceKeys.SEEK_BACK_INCREMENT,
+                getString(PreferenceKeys.SEEK_FORWARD_INCREMENT, "")
+            )
+        }
     }
 
     fun putString(key: String, value: String) {
