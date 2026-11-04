@@ -15,6 +15,7 @@ class LibreTubeApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        com.github.libretube.helpers.DebugDiagnostics.start(this)
 
         /**
          * Initialize the needed notification channels for DownloadService and BackgroundMode
