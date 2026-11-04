@@ -14,3 +14,4 @@ feat/open-in-youtube-app
 fix/home-tab-content-refresh
 feat/fullscreen-after-screen-off
 fix/sabr-first-segment-retry
+fix/post-live-playback
