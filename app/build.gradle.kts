@@ -84,7 +84,7 @@ android {
                 isIgnoreExitValue = true
             }.standardOutput.asText.get().isNotBlank()
             versionNameSuffix = "-debug-$gitCommit" + if (gitDirty) "-dirty" else ""
-            resValue("string", "app_name", "LibreTube Debug")
+            resValue("string", "app_name", "LibreTube+")
         }
     }
 
