@@ -523,6 +523,17 @@ class SabrClient private constructor(
                 val headerId = parser.readVarint()?.toInt()!!
                 val segment = partialSegments.remove(headerId) ?: return
                 Log.v(TAG, "processPart: Dequeuing partial segment $headerId")
+                if (segment.header.isInitSeg || segment.length() != segment.header.contentLength.toInt()) {
+                    val firstBytes = segment.data.firstOrNull { it.isNotEmpty() }
+                        ?.take(4)?.joinToString("") { "%02x".format(it) }
+                    com.github.libretube.helpers.DebugDiagnostics.sabr(
+                        "segment itag=${segment.header.itag} seq=${segment.sequenceNumber} " +
+                            "init=${segment.header.isInitSeg} expected=${segment.header.contentLength} " +
+                            "received=${segment.length()} in ${segment.data.size} parts " +
+                            "compression=${if (segment.header.hasCompressionAlgorithm()) segment.header.compressionAlgorithm else "unset"} " +
+                            "firstBytes=$firstBytes"
+                    )
+                }
 
                 val segmentLength = segment.length()
                 if (segmentLength != segment.header.contentLength.toInt()) {
@@ -549,6 +560,14 @@ class SabrClient private constructor(
 
             UMPPartId.FORMAT_INITIALIZATION_METADATA -> {
                 val metadata = FormatInitializationMetadata.parseFrom(part.data)
+                com.github.libretube.helpers.DebugDiagnostics.sabr(
+                    "format metadata itag=${metadata.formatId.itag} " +
+                        "endTimeMs=${if (metadata.hasEndTimeMs()) metadata.endTimeMs else "unset"} " +
+                        "durationUnits=${if (metadata.hasDurationUnits()) metadata.durationUnits else "unset"} " +
+                        "durationTimescale=${if (metadata.hasDurationTimescale()) metadata.durationTimescale else "unset"} " +
+                        "endSegmentNumber=${metadata.endSegmentNumber} mime=${metadata.mimeType} " +
+                        "alreadyInitialized=${initializedFormats.containsKey(metadata.formatId.itag)}"
+                )
 
                 val duration = metadata.endTimeMs
                 val endSegmentNumber = metadata.endSegmentNumber
