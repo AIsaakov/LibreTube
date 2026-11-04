@@ -89,6 +89,19 @@ data class Segment(
 }
 
 /**
+ * Drops the oldest of [segments] until their media data is at most [maxBytes], but keeps at least one.
+ *
+ * The player doesn't retrieve the segments of a format it isn't playing, so this keeps such a format
+ * from holding an unbounded amount of memory. Dropped segments are fetched again if the player
+ * requests them later.
+ */
+internal fun trimDownloadedSegments(segments: MutableMap<Long, Segment>, maxBytes: Long) {
+    while (segments.size > 1 && segments.values.sumOf { it.length().toLong() } > maxBytes) {
+        segments.remove(segments.keys.first())
+    }
+}
+
+/**
  * An initialized format within a video stream.
  */
 private data class InitializedFormat(
@@ -274,6 +287,18 @@ class SabrClient private constructor(
         } else if (MimeTypes.isVideo(representation.format.containerMimeType)) {
             videoFormat = representation
         }
+    }
+
+    /**
+     * Stop requesting video data, e.g. when the video track is disabled while the screen is off.
+     *
+     * Otherwise, the server keeps sending video segments along with the audio segments. Since the
+     * player never retrieves them, they would accumulate until the app runs out of memory.
+     * The downloaded video segments are dropped with the next request, when formats that are
+     * neither the audio nor the video format are cleared.
+     */
+    fun deselectVideoFormat() {
+        videoFormat = null
     }
 
     /**
@@ -514,6 +539,8 @@ class SabrClient private constructor(
                 val format = initializedFormats[segment.header.itag]!!
                 format.downloadedSegments[segment.sequenceNumber] = segment
 
+                trimDownloadedSegments(format.downloadedSegments, MAX_DOWNLOADED_BYTES)
+
                 if (segment.header.isInitSeg) {
                     format.initSegment = segment
                 }
@@ -642,6 +669,7 @@ class SabrClient private constructor(
 
     companion object {
         private const val TAG = "SabrStream"
+        private const val MAX_DOWNLOADED_BYTES = 100L * 1024 * 1024
         private const val CONTENT_TYPE = "application/x-protobuf"
         private const val ENCODING = "identity"
         private const val ACCEPT = "application/vnd.yt-ump"
