@@ -73,6 +73,20 @@ open class BaseActivity : AppCompatActivity() {
 
             val uiPref = PreferenceHelper.getString(PreferenceKeys.THEME_MODE, "A")
             AppCompatDelegate.setDefaultNightMode(getThemeMode(uiPref))
+
+            // This override configuration replaces the one AppCompat applies for the night mode,
+            // so it has to carry a forced night mode itself. Otherwise AppCompat falls back to
+            // patching the resources in place, which is lost when they are rebuilt, for example
+            // when the first WebView of the process is created.
+            val nightModeFlag = when (uiPref) {
+                "L" -> Configuration.UI_MODE_NIGHT_NO
+                "D" -> Configuration.UI_MODE_NIGHT_YES
+                else -> null
+            }
+            if (nightModeFlag != null && newBase != null) {
+                uiMode = nightModeFlag or
+                    (newBase.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv())
+            }
         }
 
         applyOverrideConfiguration(configuration)
