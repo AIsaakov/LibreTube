@@ -50,6 +50,7 @@ import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.ContentAvailability
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import org.schabi.newpipe.extractor.stream.StreamType
 import org.schabi.newpipe.extractor.stream.VideoStream
 import kotlin.time.toKotlinInstant
 
@@ -321,6 +322,8 @@ class NewPipeMediaServiceRepository : MediaServiceRepository {
             },
             visibility = resp.privacy.name.lowercase(),
             duration = resp.duration,
+            postLive = resp.streamType == StreamType.POST_LIVE_STREAM ||
+                resp.streamType == StreamType.POST_LIVE_AUDIO_STREAM,
             uploadTimestamp = resp.uploadDate.offsetDateTime().toInstant().toKotlinInstant(),
             uploaded = resp.uploadDate.offsetDateTime().toEpochSecond() * 1000,
             thumbnailUrl = resp.thumbnails.maxBy { it.height }.url,

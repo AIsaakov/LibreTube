@@ -45,6 +45,8 @@ data class Streams(
     var relatedStreams: List<StreamItem> = emptyList(),
     val subtitles: List<Subtitle> = emptyList(),
     val livestream: Boolean = false,
+    /** Whether this is a livestream that ended recently and isn't processed into a regular video yet. */
+    val postLive: Boolean = false,
     val proxyUrl: String? = null,
     val chapters: List<ChapterSegment> = emptyList(),
     val uploaderSubscriberCount: Long = 0,
