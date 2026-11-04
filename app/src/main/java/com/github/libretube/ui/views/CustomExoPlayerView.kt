@@ -1509,11 +1509,13 @@ class CustomExoPlayerView(
                 player?.togglePlayPauseState()
             }
 
-            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+            // The media fast-forward and rewind keys aren't handled here: their key-down event
+            // reaches the media session, which seeks already
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 forward()
             }
 
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> {
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
                 rewind()
             }
 

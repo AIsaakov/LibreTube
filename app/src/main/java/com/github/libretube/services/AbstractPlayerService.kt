@@ -447,31 +447,23 @@ abstract class AbstractPlayerService : MediaLibraryService(), MediaLibrarySessio
         intent: Intent
     ): Boolean {
         val event: KeyEvent = intent.parcelableExtra(Intent.EXTRA_KEY_EVENT) ?: return false
-        when (event.keyCode) {
-            KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                handlePlayerAction(PlayerEvent.Next)
-                return true
-            }
-
-            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                handlePlayerAction(PlayerEvent.Prev)
-                return true
-            }
-
-            KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                handlePlayerAction(PlayerEvent.Rewind)
-            }
-
-            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                handlePlayerAction(PlayerEvent.Forward)
-            }
-
-            KeyEvent.KEYCODE_MEDIA_STOP -> {
-                handlePlayerAction(PlayerEvent.Stop)
-            }
+        val playerEvent = when (event.keyCode) {
+            KeyEvent.KEYCODE_MEDIA_NEXT -> PlayerEvent.Next
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> PlayerEvent.Prev
+            KeyEvent.KEYCODE_MEDIA_REWIND -> PlayerEvent.Rewind
+            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> PlayerEvent.Forward
+            KeyEvent.KEYCODE_MEDIA_STOP -> PlayerEvent.Stop
+            else -> return super.onMediaButtonEvent(session, controllerInfo, intent)
         }
 
-        return super.onMediaButtonEvent(session, controllerInfo, intent)
+        // A key press arrives as a key-down and a key-up event, plus repeated key-down events
+        // while the key is held. Act once per press, like Media3's own handling. Returning true
+        // for every event also keeps Media3 from performing its default action on top,
+        // such as seeking by the player's built-in seek increment.
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            handlePlayerAction(playerEvent)
+        }
+        return true
     }
 
     override fun onDestroy() {
