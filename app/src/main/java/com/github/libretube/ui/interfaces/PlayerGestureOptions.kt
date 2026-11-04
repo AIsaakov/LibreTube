@@ -22,6 +22,24 @@ interface PlayerGestureOptions {
 
     fun onMinimize()
 
+    fun onScaleBegin()
+
+    /**
+     * Called for each step of a pinch gesture, with the focus point between the fingers in view
+     * coordinates.
+     */
+    fun onScale(factor: Float, focusX: Float, focusY: Float)
+
+    fun onScaleEnd()
+
+    /**
+     * Moves the zoomed video by the given distance in pixels.
+     *
+     * @return whether the video is zoomed and was moved, in which case the movement must not be
+     * used for any other gesture
+     */
+    fun onPan(dx: Float, dy: Float): Boolean
+
     fun onFullscreenChange(isFullscreen: Boolean)
 
     fun onLongPress()

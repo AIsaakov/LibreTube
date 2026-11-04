@@ -102,17 +102,29 @@ class PlayerGestureController(activity: BaseActivity, private val listener: Play
 
     private inner class ScaleGestureListener : ScaleGestureDetector.OnScaleGestureListener {
         var scaleFactor = 1f
+        private var lastFocusX = 0f
+        private var lastFocusY = 0f
 
         override fun onScale(detector: ScaleGestureDetector): Boolean {
             scaleFactor *= detector.scaleFactor
+            listener.onScale(detector.scaleFactor, detector.focusX, detector.focusY)
+
+            // moving both fingers together drags the zoomed video
+            listener.onPan(detector.focusX - lastFocusX, detector.focusY - lastFocusY)
+            lastFocusX = detector.focusX
+            lastFocusY = detector.focusY
             return true
         }
 
         override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+            lastFocusX = detector.focusX
+            lastFocusY = detector.focusY
+            listener.onScaleBegin()
             return true
         }
 
         override fun onScaleEnd(detector: ScaleGestureDetector) {
+            listener.onScaleEnd()
             when {
                 scaleFactor < 0.8 -> listener.onMinimize()
                 scaleFactor > 1.2 -> listener.onZoom()
@@ -201,6 +213,9 @@ class PlayerGestureController(activity: BaseActivity, private val listener: Play
             distanceX: Float,
             distanceY: Float
         ): Boolean {
+            // distanceX and distanceY point from the new position to the old one
+            if (!isMoving && listener.onPan(-distanceX, -distanceY)) return true
+
             val (width, height) = listener.getViewMeasures()
             val insideThreshHold = abs(e2.y - e1!!.y) <= MOVEMENT_THRESHOLD
             val insideBorder =
