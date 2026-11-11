@@ -35,6 +35,7 @@ import androidx.core.net.toUri
 import androidx.core.os.bundleOf
 import androidx.core.os.postDelayed
 import androidx.core.view.WindowCompat
+import androidx.core.view.doOnAttach
 import androidx.core.view.isGone
 import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
@@ -473,6 +474,12 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
                 PlayOfflineDialog.PLAY_OFFLINE_DIALOG_REQUEST_KEY, viewLifecycleOwner
             ) { _, bundle ->
                 isOffline = bundle.getBoolean(IntentData.isPlayingOffline)
+                // persist the choice, so that the fragment reconnects to the same player service
+                // when it's restored after the activity is recreated
+                requireArguments().putParcelable(
+                    IntentData.playerData,
+                    playerData.copy(isOffline = isOffline)
+                )
 
                 // start a new playback session - the method will read `isOffline` and decide whether
                 // to play the downloaded video based on it, so it's enough to set `isOffline` here
@@ -566,6 +573,13 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
             connectToPlayerView(playerController)
             updatePlayPauseButton()
 
+            // onResume skips these commands if it runs before the controller is connected, e.g. when
+            // the activity is recreated while the session keeps playing in the background
+            if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                setAutoPlayCountdownEnabled(PlayerHelper.autoPlayCountdown)
+                setVideoTrackTypeDisabled(false)
+            }
+
             if (!startNewSession) {
                 // JSON-encode as work-around for https://github.com/androidx/media/issues/564
                 val streams: Streams? =
@@ -646,8 +660,13 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
                 }
             }
 
-        binding.playerMotionLayout.progress = 1F
-        binding.playerMotionLayout.transitionToStart()
+        // MotionLayout defers setProgress until the view is attached, while transitionToStart
+        // is skipped if the progress is already 0, so running both on a detached view (e.g. when
+        // the activity is recreated) leaves the player minimized without notifying the listener
+        binding.playerMotionLayout.doOnAttach {
+            binding.playerMotionLayout.progress = 1F
+            binding.playerMotionLayout.transitionToStart()
+        }
 
         val activity = requireActivity()
         PictureInPictureCompat.setPictureInPictureParams(activity, pipParams)
@@ -954,12 +973,17 @@ class PlayerFragment : Fragment(R.layout.fragment_player), CustomPlayerCallback 
 
         if (::playerController.isInitialized && playerController.isConnected) {
             playerController.removeListener(playerListener)
-            playerController.pause()
 
-            playerController.sendCustomCommand(
-                AbstractPlayerService.stopServiceCommand,
-                Bundle.EMPTY
-            )
+            // only stop playback if the user closed the player or the app, not when the system
+            // destroys the activity in the background (e.g. to reclaim memory), since the
+            // fragment is restored and reconnects to the running session afterwards
+            if (isRemoving || activity?.isFinishing == true) {
+                playerController.pause()
+                playerController.sendCustomCommand(
+                    AbstractPlayerService.stopServiceCommand,
+                    Bundle.EMPTY
+                )
+            }
             playerController.release()
         }
 
