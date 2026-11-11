@@ -57,6 +57,7 @@ import com.github.libretube.extensions.togglePlayPauseState
 import com.github.libretube.extensions.updateIfChanged
 import com.github.libretube.helpers.AudioHelper
 import com.github.libretube.helpers.BrightnessHelper
+import com.github.libretube.helpers.IntentHelper
 import com.github.libretube.helpers.PlayerHelper
 import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.helpers.WindowHelper
@@ -612,7 +613,7 @@ class CustomExoPlayerView(
         }
     }
 
-    fun getOptionsMenuItems(): List<BottomSheetItem> = listOf(
+    fun getOptionsMenuItems(): List<BottomSheetItem> = listOfNotNull(
         BottomSheetItem(
             context.getString(R.string.repeat_mode),
             R.drawable.ic_repeat,
@@ -695,8 +696,26 @@ class CustomExoPlayerView(
             R.drawable.ic_info
         ) {
             onStatsClicked()
-        }
+        },
+        getOpenInYouTubeAppItem()
     )
+
+    private fun getOpenInYouTubeAppItem(): BottomSheetItem? {
+        val videoId = playerCallback.getVideoId()
+        IntentHelper.getYouTubeAppIntent(context, videoId, null) ?: return null
+
+        return BottomSheetItem(
+            context.getString(R.string.open_in_youtube_app),
+            R.drawable.ic_open
+        ) {
+            player?.pause()
+            // Read the position on click, since the video keeps playing while the menu is open.
+            val positionSeconds = player?.currentPosition?.div(1000)
+                ?.takeUnless { playerCallback.isVideoLive() }
+            IntentHelper.getYouTubeAppIntent(context, videoId, positionSeconds)
+                ?.let { context.startActivity(it) }
+        }
+    }
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun getCurrentResolutionSummary(): String {
