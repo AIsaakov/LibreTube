@@ -32,7 +32,10 @@ class SabrDataSource(
         transferStarted(dataSpec)
         val segment = try {
             sabrClient.getNextSegment(playbackRequest!!)!!
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // the client's debug assertions throw AssertionError, which would crash the app
+            // instead of failing playback
+            if (e !is Exception && e !is AssertionError) throw e
             Log.e(
                 SabrClient::class.java.name,
                 "open: failed to get segment ${playbackRequest!!.segment} for ${playbackRequest.format.itag}: $e"
