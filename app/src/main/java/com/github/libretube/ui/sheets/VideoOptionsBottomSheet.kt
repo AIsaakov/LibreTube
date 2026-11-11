@@ -16,6 +16,7 @@ import com.github.libretube.extensions.parcelable
 import com.github.libretube.extensions.toID
 import com.github.libretube.extensions.toastFromMainDispatcher
 import com.github.libretube.helpers.DownloadHelper
+import com.github.libretube.helpers.HiddenFeedVideosHelper
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.helpers.PlayerHelper
 import com.github.libretube.helpers.PreferenceHelper
@@ -124,6 +125,14 @@ class VideoOptionsBottomSheet : BaseBottomSheet() {
                 setFragmentResult(VIDEO_OPTIONS_SHEET_REQUEST_KEY, bundleOf(IS_VIDEO_WATCHED to true))
             }
 
+            R.string.hide_from_feed -> {
+                HiddenFeedVideosHelper.hide(videoId)
+                setFragmentResult(
+                    HIDE_FROM_FEED_REQUEST_KEY,
+                    bundleOf(IntentData.videoId to videoId)
+                )
+            }
+
             R.string.mark_as_unwatched -> {
                 withContext(Dispatchers.IO) {
                     try {
@@ -151,6 +160,9 @@ class VideoOptionsBottomSheet : BaseBottomSheet() {
             add(R.string.addToPlaylist)
             if (!streamItem.isLive) add(R.string.download)
             add(R.string.share)
+            if (arguments?.getBoolean(IntentData.canHideFromFeed) == true) {
+                add(R.string.hide_from_feed)
+            }
         }
 
         setSimpleItems(optionsList.map { getString(it) }) { which ->
@@ -211,5 +223,6 @@ class VideoOptionsBottomSheet : BaseBottomSheet() {
     companion object {
         const val VIDEO_OPTIONS_SHEET_REQUEST_KEY = "video_options_sheet_request_key"
         const val IS_VIDEO_WATCHED = "isVideoWatched"
+        const val HIDE_FROM_FEED_REQUEST_KEY = "hide_from_feed_request_key"
     }
 }

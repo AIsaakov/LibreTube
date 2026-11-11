@@ -5,6 +5,7 @@ import com.github.libretube.db.DatabaseHolder.Database
 import com.github.libretube.db.obj.SearchHistoryItem
 import com.github.libretube.enums.ContentFilter
 import com.github.libretube.extensions.toID
+import com.github.libretube.helpers.HiddenFeedVideosHelper
 import com.github.libretube.repo.LocalUserDataRepository.Companion.ABSOLUTE_WATCHED_THRESHOLD
 import com.github.libretube.repo.LocalUserDataRepository.Companion.RELATIVE_WATCHED_THRESHOLD
 import com.github.libretube.repo.UserDataRepositoryHelper
@@ -52,7 +53,7 @@ object DatabaseHelper {
         hideWatched: Boolean,
         showUpcoming: Boolean
     ): List<StreamItem> {
-        val streamItems = streams.filter {
+        val streamItems = HiddenFeedVideosHelper.filterHidden(streams).filter {
             if (!showUpcoming && it.isUpcoming) return@filter false
 
             val isVideo = !it.isShort && !it.isLive

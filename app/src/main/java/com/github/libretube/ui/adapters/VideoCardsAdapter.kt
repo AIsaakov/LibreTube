@@ -32,7 +32,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class VideoCardsAdapter(private val columnWidthDp: Float? = null) :
+class VideoCardsAdapter(
+    private val columnWidthDp: Float? = null,
+    private val canHideFromFeed: Boolean = false
+) :
     ListAdapter<StreamItem, VideoCardsViewHolder>(DiffUtilItemCallback()) {
 
     override fun getItemViewType(position: Int): Int {
@@ -122,7 +125,10 @@ class VideoCardsAdapter(private val columnWidthDp: Float? = null) :
                     notifyItemChanged(position)
                 }
                 val sheet = VideoOptionsBottomSheet()
-                sheet.arguments = bundleOf(IntentData.streamItem to video)
+                sheet.arguments = bundleOf(
+                    IntentData.streamItem to video,
+                    IntentData.canHideFromFeed to canHideFromFeed
+                )
                 sheet.show(fragmentManager, VideoCardsAdapter::class.java.name)
                 true
             }

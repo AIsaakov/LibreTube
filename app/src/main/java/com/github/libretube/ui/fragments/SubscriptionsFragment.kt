@@ -20,6 +20,7 @@ import com.github.libretube.databinding.FragmentSubscriptionsBinding
 import com.github.libretube.db.DatabaseHelper
 import com.github.libretube.extensions.toID
 import com.github.libretube.extensions.toastFromMainDispatcher
+import com.github.libretube.helpers.HiddenFeedVideosHelper
 import com.github.libretube.helpers.NavigationHelper
 import com.github.libretube.helpers.PreferenceHelper
 import com.github.libretube.obj.SelectableOption
@@ -33,8 +34,10 @@ import com.github.libretube.ui.sheets.ChannelGroupsSheet
 import com.github.libretube.ui.sheets.FilterSortBottomSheet
 import com.github.libretube.ui.sheets.FilterSortBottomSheet.Companion.FILTER_SORT_REQUEST_KEY
 import com.github.libretube.ui.sheets.SubscriptionsBottomSheet
+import com.github.libretube.ui.sheets.VideoOptionsBottomSheet
 import com.github.libretube.util.PlayingQueue
 import com.google.android.material.chip.Chip
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -53,7 +56,7 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
 
     private var isAppBarFullyExpanded = true
 
-    private var feedAdapter = VideoCardsAdapter()
+    private var feedAdapter = VideoCardsAdapter(canHideFromFeed = true)
     private var selectedSortOrder = PreferenceHelper.getInt(PreferenceKeys.FEED_SORT_ORDER, 0)
         set(value) {
             PreferenceHelper.putInt(PreferenceKeys.FEED_SORT_ORDER, value)
@@ -84,6 +87,7 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
         super.onViewCreated(view, savedInstanceState)
 
         setupSortAndFilter()
+        setupHideFromFeed()
 
         binding.subFeed.adapter = feedAdapter
 
@@ -218,6 +222,24 @@ class SubscriptionsFragment : DynamicLayoutManagerFragment(R.layout.fragment_sub
                     )
                 }
                 .show(childFragmentManager)
+        }
+    }
+
+    private fun setupHideFromFeed() {
+        // the video options sheet is shown with the activity's fragment manager
+        requireActivity().supportFragmentManager.setFragmentResultListener(
+            VideoOptionsBottomSheet.HIDE_FROM_FEED_REQUEST_KEY,
+            viewLifecycleOwner
+        ) { _, resultBundle ->
+            val videoId = resultBundle.getString(IntentData.videoId) ?: return@setFragmentResultListener
+            lifecycleScope.launch { showFeed() }
+
+            Snackbar.make(binding.root, R.string.hidden_from_feed, Snackbar.LENGTH_LONG)
+                .setAction(R.string.undo) {
+                    HiddenFeedVideosHelper.unhide(videoId)
+                    lifecycleScope.launch { showFeed() }
+                }
+                .show()
         }
     }
 
