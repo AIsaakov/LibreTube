@@ -74,6 +74,16 @@ android {
         getByName("debug") {
             isDebuggable = true
             applicationIdSuffix = ".debug"
+            // show which commit a debug build was made from, e.g. "32.1-debug-26684e5-dirty"
+            val gitCommit = providers.exec {
+                commandLine("git", "rev-parse", "--short=7", "HEAD")
+                isIgnoreExitValue = true
+            }.standardOutput.asText.get().trim().ifEmpty { "unknown" }
+            val gitDirty = providers.exec {
+                commandLine("git", "status", "--porcelain")
+                isIgnoreExitValue = true
+            }.standardOutput.asText.get().isNotBlank()
+            versionNameSuffix = "-debug-$gitCommit" + if (gitDirty) "-dirty" else ""
             resValue("string", "app_name", "LibreTube Debug")
         }
     }

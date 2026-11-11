@@ -121,6 +121,7 @@ object SleepTimer {
 
         activity?.finishAffinity()
         activity?.finish()
+        com.github.libretube.helpers.DebugDiagnostics.log("sleep timer: killing own process pid=${Process.myPid()}")
         Process.killProcess(Process.myPid())
     }
 
