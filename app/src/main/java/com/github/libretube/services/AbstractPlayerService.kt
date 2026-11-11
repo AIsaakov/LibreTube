@@ -251,6 +251,10 @@ abstract class AbstractPlayerService : MediaLibraryService(), MediaLibrarySessio
     @CallSuper
     open fun navigateVideo(videoId: String) {
         sponsorBlockSegments = emptyList()
+
+        // Save before clearing: clearMediaItems() pauses playback, but by the time the pause
+        // listener runs the old video is unloaded and its position can no longer be read.
+        saveWatchPosition()
         exoPlayer?.clearMediaItems()
 
         this.videoId = videoId
